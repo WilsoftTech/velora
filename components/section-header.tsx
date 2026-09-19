@@ -10,14 +10,14 @@ interface SectionHeaderProps {
 
 export function SectionHeader({ title, id, href }: SectionHeaderProps) {
   return (
-    <div className="mb-3 flex items-baseline justify-between gap-4 sm:mb-4">
-      <h2 id={id} className="text-lg font-semibold tracking-tight sm:text-xl">
+    <div className="mb-4 flex items-baseline justify-between gap-4">
+      <h2 id={id} className="text-headline-sm">
         {title}
       </h2>
       {href && (
         <Link
           href={href}
-          className="-my-2 inline-flex min-h-11 items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
+          className="-my-2 inline-flex min-h-11 items-center gap-1 text-label-lg text-muted transition-colors hover:text-highlight"
         >
           See all
           <ArrowRight aria-hidden className="size-4" />

@@ -17,6 +17,14 @@ export function mediaTypeLabel(mediaType: MediaType) {
   return mediaType === "movie" ? "Movie" : "TV Show";
 }
 
+/** Meta-description length: trimmed at a word boundary, undefined when empty. */
+export function summarize(text: string, maxLength = 160) {
+  const clean = text.trim();
+  if (!clean) return undefined;
+  if (clean.length <= maxLength) return clean;
+  return `${clean.slice(0, maxLength - 1).replace(/\s+\S*$/, "")}…`;
+}
+
 export function formatRuntime(minutes: number) {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;

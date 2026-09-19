@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Bookmark, X } from "lucide-react";
 import { buttonClass } from "@/components/button";
 import { EmptyState } from "@/components/empty-state";
-import { MovieListItem } from "@/components/movie-list-item";
+import { MovieList, MovieListItem } from "@/components/movie-list-item";
 import { ListSkeleton } from "@/components/skeletons";
 import { useWatchlist } from "@/lib/watchlist";
 import type { MediaType } from "@/types/media";
@@ -38,7 +38,7 @@ export function WatchlistView({ mediaType }: { mediaType: MediaType }) {
   }
 
   return (
-    <ul className="grid gap-x-10 md:grid-cols-2">
+    <MovieList>
       {visible.map((item) => (
         <MovieListItem
           key={`${item.mediaType}-${item.id}`}
@@ -48,13 +48,13 @@ export function WatchlistView({ mediaType }: { mediaType: MediaType }) {
               type="button"
               aria-label={`Remove ${item.title} from My List`}
               onClick={() => remove(item)}
-              className="grid size-11 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-surface-elevated hover:text-foreground"
+              className="grid size-11 shrink-0 place-items-center rounded-default text-muted transition-colors hover:bg-surface-elevated hover:text-foreground"
             >
               <X aria-hidden className="size-5" />
             </button>
           }
         />
       ))}
-    </ul>
+    </MovieList>
   );
 }

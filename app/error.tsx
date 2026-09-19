@@ -11,14 +11,16 @@ export default function Error({ error, retry }: { error: Error & { digest?: stri
   }, [error]);
 
   return (
-    <EmptyState
-      icon={<TriangleAlert className="size-6" />}
-      title="Something went wrong"
-      description="We couldn't load this right now. Please try again."
-    >
-      <button type="button" onClick={() => retry()} className={buttonClass("primary")}>
-        Try again
-      </button>
-    </EmptyState>
+    <div className="page-container py-12">
+      <EmptyState
+        icon={<TriangleAlert className="size-6" />}
+        title="Something went wrong"
+        description="We couldn't load this right now. Please try again."
+      >
+        <button type="button" onClick={() => retry()} className={buttonClass("primary")}>
+          Try again
+        </button>
+      </EmptyState>
+    </div>
   );
 }

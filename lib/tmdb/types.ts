@@ -1,4 +1,4 @@
-// Raw TMDB response shapes. Only the fields Verola reads are declared.
+// Raw TMDB response shapes. Only the fields Velora reads are declared.
 
 export interface TmdbResult {
   id: number;

@@ -18,9 +18,9 @@ export function TabLinks({ label, tabs }: TabLinksProps) {
               replace
               aria-current={tab.active ? "page" : undefined}
               className={cn(
-                "-mb-px inline-flex min-h-11 items-center border-b-2 text-sm font-medium transition-colors",
+                "-mb-px inline-flex min-h-11 min-w-11 items-center justify-center border-b-2 px-1 text-label-lg transition-colors",
                 tab.active
-                  ? "border-accent text-foreground"
+                  ? "border-highlight text-foreground"
                   : "border-transparent text-muted hover:text-foreground",
               )}
             >

@@ -5,14 +5,16 @@ import { EmptyState } from "@/components/empty-state";
 
 export default function NotFound() {
   return (
-    <EmptyState
-      icon={<Clapperboard className="size-6" />}
-      title="We couldn't find that"
-      description="The page you're looking for doesn't exist or has moved."
-    >
-      <Link href="/" className={buttonClass("primary")}>
-        Back to Home
-      </Link>
-    </EmptyState>
+    <div className="page-container py-12">
+      <EmptyState
+        icon={<Clapperboard className="size-6" />}
+        title="We couldn't find that"
+        description="The page you're looking for doesn't exist or has moved."
+      >
+        <Link href="/" className={buttonClass("primary")}>
+          Back to Home
+        </Link>
+      </EmptyState>
+    </div>
   );
 }

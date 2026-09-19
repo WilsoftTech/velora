@@ -20,18 +20,21 @@ function HeroSlide({ item, first }: { item: Media; first: boolean }) {
       <div aria-hidden className="absolute inset-0 hidden bg-gradient-to-r from-background/80 via-background/20 to-transparent md:block" />
 
       <div className="page-container relative flex h-full flex-col justify-end pb-12 md:pb-16">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted">Featured</p>
-        <h2 className="mt-2 max-w-2xl text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
+        <p className="inline-flex w-fit items-center gap-2 rounded-full border border-highlight/30 bg-accent/12 px-3 py-1 text-label-tag uppercase text-highlight">
+          <span aria-hidden className="size-1.5 rounded-full bg-highlight shadow-[0_0_8px_var(--highlight)]" />
+          Featured
+        </p>
+        <h2 className="mt-4 max-w-2xl text-balance text-display-hero-mobile md:text-display-hero">
           {item.title}
         </h2>
-        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground/80">
+        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-body-md text-foreground/80">
           {item.releaseYear && <span>{item.releaseYear}</span>}
           {item.genres.length > 0 && <span aria-hidden>·</span>}
           {item.genres.length > 0 && <span>{item.genres.slice(0, 2).join(" · ")}</span>}
           {item.rating !== null && <span aria-hidden>·</span>}
           <Rating value={item.rating} />
         </p>
-        <p className="mt-3 line-clamp-3 max-w-xl text-sm/6 text-foreground/80 sm:text-base/7">{item.overview}</p>
+        <p className="mt-3 line-clamp-3 max-w-xl text-body-md text-foreground/80 md:text-body-lg">{item.overview}</p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link href={mediaHref(item)} className={buttonClass("primary")}>
             <Play aria-hidden className="size-4 fill-current" />

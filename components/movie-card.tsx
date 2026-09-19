@@ -8,23 +8,26 @@ interface MovieCardProps {
   item: MediaSummary;
   /** Responsive `sizes` for the poster; defaults suit the scroll rows. */
   sizes?: string;
+  /** Load the poster immediately (first row of a grid). */
+  eager?: boolean;
   className?: string;
 }
 
-export const ROW_POSTER_SIZES = "(min-width: 1024px) 176px, (min-width: 640px) 160px, 128px";
+const ROW_POSTER_SIZES = "(min-width: 1024px) 176px, (min-width: 640px) 160px, 128px";
 
 /** The one poster card, used by scroll rows, grids and "similar" sections. */
-export function MovieCard({ item, sizes = ROW_POSTER_SIZES, className }: MovieCardProps) {
+export function MovieCard({ item, sizes = ROW_POSTER_SIZES, eager, className }: MovieCardProps) {
   return (
     <Link href={mediaHref(item)} className={cn("group block", className)}>
       <PosterImage
         path={item.posterPath}
         title={item.title}
         sizes={sizes}
-        className="ring-1 ring-inset ring-white/5 transition duration-200 group-hover:-translate-y-0.5 group-hover:ring-white/20"
+        eager={eager}
+        className="ring-1 ring-inset ring-border transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-card-glow group-hover:ring-highlight/40"
       />
-      <h3 className="mt-2 truncate text-sm font-medium">{item.title}</h3>
-      <p className="mt-0.5 flex items-center gap-2 text-xs text-muted">
+      <p className="mt-2.5 truncate text-body-md font-semibold">{item.title}</p>
+      <p className="mt-0.5 flex items-center gap-2 text-body-sm text-muted">
         {item.releaseYear && <span>{item.releaseYear}</span>}
         <Rating value={item.rating} />
       </p>

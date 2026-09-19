@@ -53,7 +53,13 @@ async function BrowseResults({ kind, list, page }: { kind: BrowseKind; list: Bro
   const data: MediaPage = await load(list, page);
 
   if (data.items.length === 0) {
-    return <EmptyState icon={<Film className="size-6" />} title="Nothing to show here" description="Try another list." />;
+    return (
+      <EmptyState icon={<Film className="size-6" />} title="Nothing to show here" description="This page doesn't exist.">
+        <Link href={browseHref(path, list)} className={buttonClass("primary")}>
+          Back to first page
+        </Link>
+      </EmptyState>
+    );
   }
 
   return (
@@ -68,7 +74,7 @@ async function BrowseResults({ kind, list, page }: { kind: BrowseKind; list: Bro
           ) : (
             <span className="min-w-24" />
           )}
-          <span className="text-sm text-muted">
+          <span className="text-body-md text-muted">
             Page {data.page} of {data.totalPages}
           </span>
           {page < data.totalPages ? (
@@ -93,7 +99,7 @@ export async function BrowsePage({ kind, searchParams }: { kind: BrowseKind; sea
 
   return (
     <div className="page-container py-6 sm:py-8">
-      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+      <h1 className="text-headline-md md:text-headline-lg">{title}</h1>
       {hasLists && (
         <div className="mt-4 max-w-xs">
           <TabLinks

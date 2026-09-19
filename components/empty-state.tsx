@@ -8,17 +8,20 @@ interface EmptyStateProps {
   children?: ReactNode;
 }
 
-/** Shared by empty lists, no-result searches, and error boundaries. */
+/** Glass panel shared by empty lists, no-result searches, and error boundaries. */
 export function EmptyState({ icon, title, description, children }: EmptyStateProps) {
   return (
-    <div className="mx-auto flex max-w-sm flex-col items-center px-4 py-16 text-center">
+    <div className="mx-auto my-8 flex max-w-md flex-col items-center rounded-lg border border-border bg-surface px-6 py-12 text-center backdrop-blur-md">
       {icon && (
-        <div aria-hidden className="mb-5 grid size-14 place-items-center rounded-full bg-surface-elevated text-muted">
+        <div
+          aria-hidden
+          className="mb-5 grid size-14 place-items-center rounded-full border border-highlight/30 bg-accent/12 text-highlight"
+        >
           {icon}
         </div>
       )}
-      <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-      {description && <p className="mt-2 text-sm/6 text-muted">{description}</p>}
+      <h2 className="text-headline-sm">{title}</h2>
+      {description && <p className="mt-2 text-body-md text-muted">{description}</p>}
       {children && <div className="mt-6">{children}</div>}
     </div>
   );

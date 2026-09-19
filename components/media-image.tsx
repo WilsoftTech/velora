@@ -10,28 +10,39 @@ interface MediaImageProps {
   alt?: string;
   /** Reserve for the single most important above-the-fold image. */
   preload?: boolean;
+  /** Skip lazy loading for images that are certainly visible on first paint. */
+  eager?: boolean;
   className?: string;
 }
 
-// A stable per-title hue keeps artwork-less cards distinct without any assets.
+// A stable per-title hue, kept inside the blue family so artwork-less cards
+// stay on-brand without any assets.
 function hueFor(title: string) {
   let hash = 0;
-  for (const char of title) hash = (hash * 31 + char.charCodeAt(0)) % 360;
-  return hash;
+  for (const char of title) hash = (hash * 31 + char.charCodeAt(0)) % 40;
+  return 200 + hash;
 }
 
-export function PosterImage({ path, title, sizes, alt = "", preload, className }: MediaImageProps) {
+export function PosterImage({ path, title, sizes, alt = "", preload, eager, className }: MediaImageProps) {
   const hue = hueFor(title);
   return (
-    <div className={cn("relative aspect-[2/3] overflow-hidden rounded-lg bg-surface-elevated", className)}>
+    <div className={cn("relative aspect-[2/3] overflow-hidden rounded-lg bg-canvas-subtle", className)}>
       {path ? (
-        <Image src={path} alt={alt} fill sizes={sizes} preload={preload} className="object-cover" />
+        <Image
+          src={path}
+          alt={alt}
+          fill
+          sizes={sizes}
+          preload={preload}
+          loading={eager ? "eager" : undefined}
+          className="object-cover"
+        />
       ) : (
         <div
           className="flex size-full items-end p-3"
-          style={{ backgroundImage: `linear-gradient(160deg, hsl(${hue} 38% 24%), hsl(${(hue + 40) % 360} 42% 9%))` }}
+          style={{ backgroundImage: `linear-gradient(160deg, hsl(${hue} 55% 24%), hsl(${hue + 15} 60% 8%))` }}
         >
-          <span className="line-clamp-4 text-sm font-semibold leading-tight text-foreground/90">{title}</span>
+          <span className="line-clamp-4 text-label-lg text-foreground/90">{title}</span>
         </div>
       )}
     </div>
@@ -44,7 +55,10 @@ export function BackdropImage({ path, sizes, alt = "", preload, className }: Omi
     return (
       <div
         aria-hidden
-        className={cn("absolute inset-0 bg-[radial-gradient(ellipse_at_70%_20%,rgb(131_82_245/0.35),transparent_60%)] bg-surface", className)}
+        className={cn(
+          "absolute inset-0 bg-canvas-subtle bg-[radial-gradient(ellipse_at_70%_20%,rgb(37_99_235/0.4),transparent_60%)]",
+          className,
+        )}
       />
     );
   }

@@ -94,13 +94,13 @@ export function SearchInput({ query, scope }: SearchInputProps) {
           const value = event.target.value;
           timerRef.current = window.setTimeout(() => navigate(value), DEBOUNCE_MS);
         }}
-        className="peer h-12 w-full rounded-full border border-border bg-surface pl-12 pr-12 text-base text-foreground placeholder:text-muted focus:border-accent focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
+        className="peer h-12 w-full rounded-default border border-border bg-canvas-subtle/80 pl-12 pr-12 text-base text-foreground placeholder:text-muted/80 transition-[border-color,box-shadow] focus:border-highlight focus:shadow-focus focus-visible:outline-none [&::-webkit-search-cancel-button]:appearance-none"
       />
       <button
         type="button"
         aria-label="Clear search"
         onClick={clear}
-        className="absolute right-0.5 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full text-muted transition-colors hover:text-foreground peer-placeholder-shown:hidden"
+        className="absolute right-0.5 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-default text-muted transition-colors hover:text-foreground peer-placeholder-shown:hidden"
       >
         <X aria-hidden className="size-5" />
       </button>

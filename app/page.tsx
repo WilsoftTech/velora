@@ -24,12 +24,12 @@ function Catalog(props: Parameters<typeof CatalogSection>[0]) {
 export default function HomePage() {
   return (
     <>
-      <h1 className="sr-only">Verola — discover movies and TV shows</h1>
+      <h1 className="sr-only">Velora — discover movies and TV shows</h1>
       <Suspense fallback={<HeroSkeleton />}>
         <Hero />
       </Suspense>
 
-      <div className="page-container space-y-10 pt-8 sm:space-y-12 sm:pt-10">
+      <div className="page-container space-y-12 pt-10 sm:space-y-16 sm:pt-14">
         <Catalog title="Trending Now" href="/trending" load={() => getTrending()} />
         <Catalog title="Popular Movies" href="/movies" load={() => getMovies("popular")} />
         <Catalog title="Popular TV Shows" href="/tv" load={() => getShows("popular")} />

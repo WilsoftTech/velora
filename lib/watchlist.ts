@@ -7,7 +7,7 @@ import type { MediaSummary } from "@/types/media";
  * exist. Only the fields needed to render a row are stored, so swapping the
  * storage later does not change any component.
  */
-const STORAGE_KEY = "verola:my-list";
+const STORAGE_KEY = "velora:my-list";
 
 let cache: MediaSummary[] | null = null;
 const listeners = new Set<() => void>();

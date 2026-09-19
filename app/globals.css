@@ -1,59 +1,135 @@
 @import "tailwindcss";
 
 /*
- * Verola design tokens. Components only reference the semantic names below, so
- * a future light theme is a matter of overriding these variables.
+ * Velora design tokens, taken from DESIGN.md ("Cognitive Deep-Blue Glass").
+ * Components reference only the semantic names below, so a future light theme
+ * is a matter of overriding these variables.
  */
 :root {
   color-scheme: dark;
-  --background: #0a0a0f;
-  --surface: #111218;
-  --surface-elevated: #1a1a24;
-  --foreground: #ffffff;
+
+  /* Canvas */
+  --background: #070b14; /* canvas-default */
+  --canvas-subtle: #0a0f1d;
+
+  /* Glass layers: translucent white over the canvas */
+  --surface: rgb(255 255 255 / 0.04);
+  --surface-elevated: rgb(255 255 255 / 0.08); /* glass hover / raised */
+  --border: rgb(255 255 255 / 0.1); /* border-glass */
+
+  /* Text */
+  --foreground: #ffffff; /* text-primary */
+  /* text-secondary. DESIGN.md's text-muted (#64748b) is only 4.1:1 on the canvas,
+     so it is not used for small text. */
   --muted: #94a3b8;
-  --border: #2a2a36;
-  --accent: #8352f5; /* reference violet, nudged so white text passes AA (4.7:1) */
+
+  /* Brand spectrum */
+  --accent: #2563eb; /* primary: cobalt, main actions */
+  --accent-hover: #1d4ed8;
   --accent-foreground: #ffffff;
-  --destructive: #ef4444;
+  --highlight: #38bdf8; /* secondary: sky, focus / active / eyebrows */
+  --tertiary: #60a5fa; /* electric highlight */
+
+  --destructive: #ffb4ab;
+  /* Ratings keep the conventional star colour; the one non-palette hue. */
   --star: #f59e0b;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-canvas-subtle: var(--canvas-subtle);
   --color-surface: var(--surface);
   --color-surface-elevated: var(--surface-elevated);
+  --color-border: var(--border);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
-  --color-border: var(--border);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-foreground: var(--accent-foreground);
+  --color-highlight: var(--highlight);
+  --color-tertiary: var(--tertiary);
   --color-destructive: var(--destructive);
   --color-star: var(--star);
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme {
+  /* Radii (DESIGN.md `rounded`): default 8px for controls, lg 16px for cards. */
+  --radius-sm: 0.25rem;
+  --radius-default: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  /* Typography scale (DESIGN.md `typography`). */
+  --text-display-hero: 3.5rem;
+  --text-display-hero--line-height: 4rem;
+  --text-display-hero--font-weight: 800;
+  --text-display-hero--letter-spacing: -0.03em;
+  --text-display-hero-mobile: 2.25rem;
+  --text-display-hero-mobile--line-height: 2.75rem;
+  --text-display-hero-mobile--font-weight: 800;
+  --text-display-hero-mobile--letter-spacing: -0.02em;
+  --text-headline-lg: 2.5rem;
+  --text-headline-lg--line-height: 3rem;
+  --text-headline-lg--font-weight: 700;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-md: 1.75rem; /* also the mobile size of headline-lg */
+  --text-headline-md--line-height: 2.25rem;
+  --text-headline-md--font-weight: 700;
+  --text-headline-md--letter-spacing: -0.01em;
+  --text-headline-sm: 1.25rem;
+  --text-headline-sm--line-height: 1.75rem;
+  --text-headline-sm--font-weight: 600;
+  --text-body-lg: 1.125rem;
+  --text-body-lg--line-height: 1.75rem;
+  --text-body-md: 0.9375rem;
+  --text-body-md--line-height: 1.5rem;
+  --text-body-sm: 0.8125rem;
+  --text-body-sm--line-height: 1.25rem;
+  --text-label-lg: 0.875rem;
+  --text-label-lg--line-height: 1.25rem;
+  --text-label-lg--font-weight: 600;
+  --text-label-lg--letter-spacing: 0.01em;
+  --text-label-md: 0.75rem;
+  --text-label-md--line-height: 1rem;
+  --text-label-md--font-weight: 600;
+  --text-label-md--letter-spacing: 0.05em;
+  --text-label-tag: 0.6875rem;
+  --text-label-tag--line-height: 0.875rem;
+  --text-label-tag--font-weight: 700;
+  --text-label-tag--letter-spacing: 0.08em;
+
+  /* Elevation: chromatic glows instead of harsh drop shadows. */
+  --shadow-glow: 0 0 20px rgb(37 99 235 / 0.4); /* primary hover halo */
+  --shadow-card-glow: 0 0 24px rgb(37 99 235 / 0.25);
+  --shadow-float: 0 12px 32px -4px rgb(0 0 0 / 0.6), 0 0 24px rgb(37 99 235 / 0.15);
+  --shadow-focus: 0 0 0 3px rgb(56 189 248 / 0.2);
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
+  /* Layer 0: a faint ambient glow at the top of the canvas. */
+  background-image: radial-gradient(ellipse 70% 100% at 80% 0%, rgb(37 99 235 / 0.12), transparent 70%);
+  background-size: 100% 42rem;
+  background-repeat: no-repeat;
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--highlight);
   outline-offset: 2px;
 }
 
-/* Shared page gutter: 16px on phones, growing with the viewport. */
+/* Page gutter: 20px on phones, 40px from tablet up; 1280px max width. */
 @utility page-container {
   margin-inline: auto;
   width: 100%;
-  max-width: 88rem;
-  padding-inline: 1rem;
-  @media (min-width: 40rem) {
-    padding-inline: 1.5rem;
-  }
-  @media (min-width: 64rem) {
+  max-width: 80rem;
+  padding-inline: 1.25rem;
+  @media (min-width: 48rem) {
     padding-inline: 2.5rem;
   }
 }
@@ -61,15 +137,10 @@ body {
 /* Lets a scroll row run edge-to-edge inside `page-container`. The matching
    scroll-padding keeps snap points aligned with the gutter, not the row edge. */
 @utility page-bleed {
-  margin-inline: -1rem;
-  padding-inline: 1rem;
-  scroll-padding-inline: 1rem;
-  @media (min-width: 40rem) {
-    margin-inline: -1.5rem;
-    padding-inline: 1.5rem;
-    scroll-padding-inline: 1.5rem;
-  }
-  @media (min-width: 64rem) {
+  margin-inline: -1.25rem;
+  padding-inline: 1.25rem;
+  scroll-padding-inline: 1.25rem;
+  @media (min-width: 48rem) {
     margin-inline: -2.5rem;
     padding-inline: 2.5rem;
     scroll-padding-inline: 2.5rem;

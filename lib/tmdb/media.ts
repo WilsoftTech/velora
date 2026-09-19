@@ -58,28 +58,29 @@ function toMediaPage(data: TmdbPaged<TmdbResult>, fallbackType?: MediaType): Med
   };
 }
 
-function samplePage(items: Media[]): MediaPage {
-  return { items, page: 1, totalPages: 1 };
+// The sample catalogue is a single page, like a short TMDB list.
+function samplePage(items: Media[], page: number): MediaPage {
+  return { items: page === 1 ? items : [], page, totalPages: 1 };
 }
 
 export async function getTrending(page = 1): Promise<MediaPage> {
-  if (usingSampleData()) return samplePage(sampleMedia());
+  if (usingSampleData()) return samplePage(sampleMedia(), page);
   return toMediaPage(await tmdbFetchPage<TmdbResult>("/trending/all/week", { page }));
 }
 
 export async function getMovies(list: BrowseList, page = 1): Promise<MediaPage> {
-  if (usingSampleData()) return samplePage(sampleMedia({ mediaType: "movie" }));
+  if (usingSampleData()) return samplePage(sampleMedia({ mediaType: "movie" }), page);
   return toMediaPage(await tmdbFetchPage<TmdbResult>(`/movie/${list}`, { page }), "movie");
 }
 
 export async function getShows(list: BrowseList, page = 1): Promise<MediaPage> {
-  if (usingSampleData()) return samplePage(sampleMedia({ mediaType: "tv" }));
+  if (usingSampleData()) return samplePage(sampleMedia({ mediaType: "tv" }), page);
   return toMediaPage(await tmdbFetchPage<TmdbResult>(`/tv/${list}`, { page }), "tv");
 }
 
 export async function searchMedia(query: string, scope: SearchScope = "all"): Promise<MediaPage> {
   if (usingSampleData()) {
-    return samplePage(sampleMedia({ mediaType: scope === "all" ? undefined : scope, search: query }));
+    return samplePage(sampleMedia({ mediaType: scope === "all" ? undefined : scope, search: query }), 1);
   }
   const endpoint = scope === "all" ? "multi" : scope;
   const data = await tmdbFetchPage<TmdbResult>(`/search/${endpoint}`, {

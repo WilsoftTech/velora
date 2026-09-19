@@ -193,7 +193,7 @@ const SAMPLE_CAST: Record<number, CastMember[]> = {
   ],
 };
 
-export interface SampleQuery {
+interface SampleQuery {
   mediaType?: MediaType;
   search?: string;
 }

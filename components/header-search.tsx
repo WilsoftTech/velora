@@ -24,7 +24,7 @@ export function HeaderSearch() {
         type="search"
         autoComplete="off"
         placeholder="Search movies, shows…"
-        className="h-10 w-56 rounded-full border border-border bg-surface pl-10 pr-4 text-sm text-foreground placeholder:text-muted transition-[width,border-color] duration-200 focus:w-72 focus:border-accent focus:outline-none lg:w-72 lg:focus:w-80"
+        className="h-10 w-56 rounded-default border border-border bg-canvas-subtle/80 pl-10 pr-4 text-body-md text-foreground placeholder:text-muted/80 transition-[width,border-color,box-shadow] duration-200 focus:w-72 focus:border-highlight focus:shadow-focus focus-visible:outline-none lg:w-72 lg:focus:w-80"
       />
     </form>
   );

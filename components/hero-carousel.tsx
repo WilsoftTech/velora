@@ -22,7 +22,8 @@ export function HeroCarousel({ children, label }: { children: ReactNode; label: 
     const track = trackRef.current;
     if (!track) return;
     const next = (target + slides.length) % slides.length;
-    track.scrollTo({ left: next * track.clientWidth, behavior: "smooth" });
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    track.scrollTo({ left: next * track.clientWidth, behavior: reduceMotion ? "auto" : "smooth" });
   }
 
   return (
@@ -52,7 +53,7 @@ export function HeroCarousel({ children, label }: { children: ReactNode; label: 
             type="button"
             aria-label="Previous slide"
             onClick={() => goTo(index - 1)}
-            className="pointer-events-auto hidden size-10 place-items-center rounded-full border border-border bg-background/60 transition-colors hover:bg-surface-elevated md:grid"
+            className="pointer-events-auto hidden size-10 place-items-center rounded-default border border-border bg-surface backdrop-blur-md transition-colors hover:border-highlight/40 hover:bg-surface-elevated md:grid"
           >
             <ChevronLeft aria-hidden className="size-5" />
           </button>
@@ -64,12 +65,12 @@ export function HeroCarousel({ children, label }: { children: ReactNode; label: 
                 aria-label={`Show slide ${dotIndex + 1}`}
                 aria-current={dotIndex === index}
                 onClick={() => goTo(dotIndex)}
-                className="grid h-11 w-6 place-items-center"
+                className="grid h-11 w-8 place-items-center"
               >
                 <span
                   className={cn(
                     "h-1.5 rounded-full transition-all duration-200",
-                    dotIndex === index ? "w-5 bg-foreground" : "w-1.5 bg-foreground/40",
+                    dotIndex === index ? "w-5 bg-highlight" : "w-1.5 bg-foreground/30",
                   )}
                 />
               </button>
@@ -79,7 +80,7 @@ export function HeroCarousel({ children, label }: { children: ReactNode; label: 
             type="button"
             aria-label="Next slide"
             onClick={() => goTo(index + 1)}
-            className="pointer-events-auto hidden size-10 place-items-center rounded-full border border-border bg-background/60 transition-colors hover:bg-surface-elevated md:grid"
+            className="pointer-events-auto hidden size-10 place-items-center rounded-default border border-border bg-surface backdrop-blur-md transition-colors hover:border-highlight/40 hover:bg-surface-elevated md:grid"
           >
             <ChevronRight aria-hidden className="size-5" />
           </button>

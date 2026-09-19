@@ -15,7 +15,7 @@ export function TrailerPlayer({ videoKey, title, backdropPath }: TrailerPlayerPr
   const [playing, setPlaying] = useState(false);
 
   return (
-    <div className="relative aspect-video overflow-hidden rounded-xl bg-surface ring-1 ring-inset ring-white/5">
+    <div className="relative aspect-video overflow-hidden rounded-lg border border-border bg-canvas-subtle">
       {playing ? (
         <iframe
           src={`https://www.youtube-nocookie.com/embed/${videoKey}?autoplay=1&rel=0`}
@@ -33,7 +33,7 @@ export function TrailerPlayer({ videoKey, title, backdropPath }: TrailerPlayerPr
         >
           <BackdropImage path={backdropPath} sizes="(min-width: 1024px) 896px, 100vw" />
           <span className="absolute inset-0 bg-background/30 transition-colors group-hover:bg-background/10" />
-          <span className="absolute left-1/2 top-1/2 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-accent text-accent-foreground transition-transform duration-200 group-hover:scale-105">
+          <span className="absolute left-1/2 top-1/2 grid size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-accent text-accent-foreground shadow-glow transition duration-200 group-hover:scale-105 group-hover:bg-accent-hover">
             <Play aria-hidden className="size-7 fill-current" />
           </span>
         </button>

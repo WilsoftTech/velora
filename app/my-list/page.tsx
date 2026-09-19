@@ -10,8 +10,8 @@ export default async function MyListPage({ searchParams }: PageProps<"/my-list">
   const mediaType = parseMediaType(firstParam(params.tab) ?? "") ?? "movie";
 
   return (
-    <div className="page-container mx-auto max-w-4xl py-6 sm:py-8">
-      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">My List</h1>
+    <div className="page-container max-w-3xl py-6 sm:py-8">
+      <h1 className="text-headline-md md:text-headline-lg">My List</h1>
       <div className="mt-4 max-w-xs">
         <TabLinks
           label="My List sections"

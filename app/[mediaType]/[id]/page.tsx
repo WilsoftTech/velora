@@ -10,7 +10,7 @@ import { SectionHeader } from "@/components/section-header";
 import { TrailerPlayer } from "@/components/trailer-player";
 import { WatchlistButton } from "@/components/watchlist-button";
 import { getMediaDetail } from "@/lib/tmdb/media";
-import { formatRuntime, mediaTypeLabel, parseMediaType, toSummary } from "@/lib/utils";
+import { formatRuntime, mediaTypeLabel, parseMediaType, summarize, toSummary } from "@/lib/utils";
 
 async function loadDetail(mediaType: string, rawId: string) {
   const type = parseMediaType(mediaType);
@@ -24,13 +24,15 @@ export async function generateMetadata({ params }: PageProps<"/[mediaType]/[id]"
   const detail = await loadDetail(mediaType, id);
   if (!detail) return {};
 
+  const description = summarize(detail.overview);
   return {
     title: detail.title,
-    description: detail.overview.slice(0, 160),
-    alternates: { canonical: `/${mediaType}/${id}` },
+    description,
+    alternates: { canonical: `/${detail.mediaType}/${detail.id}` },
     openGraph: {
+      type: detail.mediaType === "movie" ? "video.movie" : "video.tv_show",
       title: detail.title,
-      description: detail.overview.slice(0, 160),
+      description,
       images: detail.backdropPath ? [`https://image.tmdb.org/t/p/w780${detail.backdropPath}`] : undefined,
     },
   };
@@ -64,15 +66,15 @@ export default async function MediaDetailPage({ params }: PageProps<"/[mediaType
               title={detail.title}
               alt={`${detail.title} poster`}
               sizes="(min-width: 1024px) 224px, 176px"
-              className="hidden w-44 shrink-0 shadow-2xl ring-1 ring-white/10 md:block lg:w-56"
+              className="hidden w-44 shrink-0 shadow-float ring-1 ring-border md:block lg:w-56"
             />
             <div className="min-w-0 max-w-3xl">
-              <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
+              <h1 className="text-balance text-headline-md md:text-headline-lg">
                 {detail.title}
               </h1>
-              {detail.tagline && <p className="mt-2 text-sm italic text-muted">{detail.tagline}</p>}
+              {detail.tagline && <p className="mt-2 text-body-md italic text-muted">{detail.tagline}</p>}
 
-              <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground/80">
+              <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-body-md text-foreground/80">
                 <span>{facts.join(" · ")}</span>
                 {detail.rating !== null && <span aria-hidden>·</span>}
                 <Rating value={detail.rating} />
@@ -81,7 +83,7 @@ export default async function MediaDetailPage({ params }: PageProps<"/[mediaType
               {detail.genres.length > 0 && (
                 <ul aria-label="Genres" className="mt-4 flex flex-wrap gap-2">
                   {detail.genres.map((genre) => (
-                    <li key={genre} className="rounded-full border border-border px-3 py-1 text-xs text-foreground/80">
+                    <li key={genre} className="rounded-full border border-highlight/30 bg-accent/12 px-3 py-1 text-label-tag uppercase text-highlight">
                       {genre}
                     </li>
                   ))}
@@ -89,7 +91,7 @@ export default async function MediaDetailPage({ params }: PageProps<"/[mediaType
               )}
 
               {detail.overview && (
-                <p className="mt-5 max-w-2xl text-sm/6 text-foreground/80 sm:text-base/7">{detail.overview}</p>
+                <p className="mt-5 max-w-2xl text-body-md text-foreground/80 md:text-body-lg">{detail.overview}</p>
               )}
 
               <div className="mt-6 flex flex-wrap gap-3">
@@ -106,7 +108,7 @@ export default async function MediaDetailPage({ params }: PageProps<"/[mediaType
         </div>
       </div>
 
-      <div className="page-container mt-12 space-y-10 sm:space-y-12">
+      <div className="page-container mt-14 space-y-12 sm:space-y-16">
         {detail.trailerKey && (
           <section id="trailer" aria-labelledby="trailer-heading" className="scroll-mt-20 max-w-4xl">
             <SectionHeader id="trailer-heading" title="Trailer" />

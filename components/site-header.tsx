@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { HeaderSearch } from "@/components/header-search";
+import { Logo } from "@/components/logo";
 import { NavLink } from "@/components/nav-link";
 
 const NAV_ITEMS = [
@@ -13,10 +14,10 @@ const NAV_ITEMS = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/70 backdrop-blur-xl">
       <div className="page-container flex h-14 items-center gap-8 md:h-16">
-        <Link href="/" className="text-xl font-semibold tracking-tight">
-          Verola
+        <Link href="/" className="inline-flex min-h-11 items-center">
+          <Logo eager className="h-8 md:h-9" />
         </Link>
 
         <nav aria-label="Primary" className="hidden md:block">
@@ -25,8 +26,8 @@ export function SiteHeader() {
               <li key={item.href}>
                 <NavLink
                   href={item.href}
-                  className="relative inline-flex min-h-11 items-center px-3 text-sm text-muted transition-colors hover:text-foreground"
-                  activeClassName="text-foreground after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-accent"
+                  className="relative inline-flex min-h-11 items-center px-3 text-label-lg text-muted transition-colors hover:text-foreground"
+                  activeClassName="text-foreground after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-highlight after:shadow-[0_0_12px_rgb(56_189_248/0.6)]"
                 >
                   {item.label}
                 </NavLink>
@@ -40,7 +41,7 @@ export function SiteHeader() {
           <Link
             href="/search"
             aria-label="Search"
-            className="-mr-2 grid size-11 place-items-center rounded-full text-foreground transition-colors hover:bg-surface-elevated md:hidden"
+            className="-mr-2 grid size-11 place-items-center rounded-default text-foreground transition-colors hover:bg-surface-elevated md:hidden"
           >
             <Search aria-hidden className="size-5" />
           </Link>

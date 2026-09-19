@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
-import { SearchX, TrendingUp } from "lucide-react";
+import { SearchX, TriangleAlert, TrendingUp } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
-import { MovieListItem } from "@/components/movie-list-item";
+import { MovieList, MovieListItem } from "@/components/movie-list-item";
+import { RetryButton } from "@/components/retry-button";
 import { SearchInput } from "@/components/search-input";
 import { ListSkeleton } from "@/components/skeletons";
 import { TabLinks } from "@/components/tab-links";
@@ -22,7 +23,22 @@ const SCOPES: { label: string; value: SearchScope }[] = [
 const TRENDING_SEARCH_COUNT = 6;
 
 async function SearchResults({ query, scope }: { query: string; scope: SearchScope }) {
-  const { items } = await searchMedia(query, scope);
+  let items;
+  try {
+    ({ items } = await searchMedia(query, scope));
+  } catch (error) {
+    // Handled here rather than by the route error boundary so the input stays usable.
+    console.error(`Search failed for "${query}"`, error);
+    return (
+      <EmptyState
+        icon={<TriangleAlert className="size-6" />}
+        title="Something went wrong"
+        description="We couldn't load results right now. Please try again."
+      >
+        <RetryButton />
+      </EmptyState>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -35,11 +51,11 @@ async function SearchResults({ query, scope }: { query: string; scope: SearchSco
   }
 
   return (
-    <ul className="grid gap-x-10 md:grid-cols-2">
+    <MovieList>
       {items.map((item) => (
         <MovieListItem key={`${item.mediaType}-${item.id}`} item={item} />
       ))}
-    </ul>
+    </MovieList>
   );
 }
 
@@ -55,7 +71,7 @@ async function TrendingSearches() {
 
   return (
     <section aria-labelledby="trending-searches">
-      <h2 id="trending-searches" className="mb-1 text-sm font-medium text-muted">
+      <h2 id="trending-searches" className="mb-1 text-label-md uppercase text-muted">
         Trending searches
       </h2>
       <ul>
@@ -64,7 +80,7 @@ async function TrendingSearches() {
             <Link
               href={`/search?q=${encodeURIComponent(title)}`}
               replace
-              className="flex min-h-12 items-center gap-3 border-b border-border/60 text-sm transition-colors hover:text-muted"
+              className="flex min-h-12 items-center gap-3 border-b border-border text-body-md transition-colors hover:text-highlight"
             >
               <TrendingUp aria-hidden className="size-4 text-muted" />
               {title}
@@ -82,8 +98,8 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
   const scope = parseSearchScope(params.type);
 
   return (
-    <div className="page-container mx-auto max-w-4xl py-6 sm:py-8">
-      <h1 className="mb-4 text-2xl font-semibold tracking-tight sm:text-3xl">Search</h1>
+    <div className="page-container max-w-3xl py-6 sm:py-8">
+      <h1 className="mb-4 text-headline-md md:text-headline-lg">Search</h1>
       <SearchInput query={query} scope={scope} />
 
       <div className="mt-6">

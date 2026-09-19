@@ -3,12 +3,13 @@ import { cn } from "@/lib/utils";
 export type ButtonVariant = "primary" | "secondary" | "ghost";
 
 const base =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-default px-6 text-label-lg transition duration-150 disabled:pointer-events-none disabled:opacity-50";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-accent-foreground hover:bg-accent/90 active:bg-accent/80",
+  // Solid cobalt; hover deepens the fill and adds a soft halo (DESIGN.md → Buttons).
+  primary: "bg-accent text-accent-foreground hover:bg-accent-hover hover:shadow-glow active:bg-accent-hover",
   secondary:
-    "border border-border bg-surface-elevated/70 text-foreground hover:bg-surface-elevated active:bg-border/60",
+    "border border-border bg-surface text-foreground hover:border-highlight/40 hover:bg-surface-elevated active:bg-surface-elevated",
   ghost: "text-muted hover:text-foreground active:text-foreground",
 };
 

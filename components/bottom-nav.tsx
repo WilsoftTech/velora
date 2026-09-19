@@ -13,15 +13,15 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
     >
       <ul className="grid grid-cols-4">
         {TABS.map(({ href, label, icon: Icon }) => (
           <li key={href}>
             <NavLink
               href={href}
-              className="relative flex min-h-14 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted transition-colors"
-              activeClassName="text-foreground before:absolute before:inset-x-6 before:top-0 before:h-0.5 before:rounded-full before:bg-accent"
+              className="relative flex min-h-14 flex-col items-center justify-center gap-1 text-label-md text-muted transition-colors"
+              activeClassName="text-highlight before:absolute before:inset-x-6 before:top-0 before:h-0.5 before:rounded-full before:bg-highlight"
             >
               <Icon aria-hidden className="size-5" />
               {label}

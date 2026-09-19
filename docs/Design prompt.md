@@ -1,18 +1,20 @@
-# VEROLA — Modern Movie Discovery Platform
+# VELORA — Modern Movie Discovery Platform
 
 You are a senior product designer, UI/UX designer, and frontend design engineer.
 
-Your task is to design and implement the visual experience for **VEROLA**, a modern movie and TV discovery platform.
+Your task is to design and implement the visual experience for **VELORA**, a modern movie and TV discovery platform.
 
-VEROLA should feel like a polished global consumer product — cinematic, sophisticated, fast, minimal, and highly usable — rather than a tutorial project or a direct clone of an existing streaming service.
+VELORA should feel like a polished global consumer product — cinematic, sophisticated, fast, minimal, and highly usable — rather than a tutorial project or a direct clone of an existing streaming service.
 
 The product is currently a responsive web application but is intentionally being designed so its experience can later translate naturally into an **Expo / React Native mobile application**.
+
+**Source of truth.** `DESIGN.md` ("Cognitive Deep-Blue Glass") defines the visual system: colour, typography, spacing, radii, elevation and component styling. This document defines the *product and UX* — what screens exist, how they are organised and how they behave — and applies that visual system to a movie and TV discovery product. Where the two disagree, `DESIGN.md` wins. `DESIGN.md` also contains copy written for an enterprise-AI product ("AI assistants" chips, dashboards); take its *visual* rules, not that subject matter. Implemented tokens live in `app/globals.css`.
 
 ---
 
 # 1. Product Vision
 
-VEROLA helps users:
+VELORA helps users:
 
 * Discover movies and TV shows
 * Browse trending and popular content
@@ -27,7 +29,7 @@ VEROLA helps users:
 
 The experience should prioritize **discovery**.
 
-Users should be able to open VEROLA and immediately find something interesting.
+Users should be able to open VELORA and immediately find something interesting.
 
 The interface should feel:
 
@@ -100,13 +102,19 @@ Do not perform unrelated rewrites.
 
 Product name:
 
-# VEROLA
+# VELORA
 
-The VEROLA brand should feel distinctive enough to become a standalone entertainment technology brand.
+The VELORA brand should feel distinctive enough to become a standalone entertainment technology brand.
 
 Avoid copying Netflix, Disney+, Prime Video, Apple TV+, IMDb, Letterboxd, or TMDB.
 
-They may inform general UX conventions, but VEROLA must have its own visual identity.
+They may inform general UX conventions, but VELORA must have its own visual identity.
+
+The logo is a film-strip "V" containing a play symbol, in luminous blues on deep navy, with a widely tracked geometric wordmark. Its palette is the same as the interface, so the mark sits on the canvas without a container.
+
+* Source artwork: `public/images/logo.webp`
+* UI lockup (mark + wordmark, transparent background): `public/images/logo-lockup.webp`, rendered by the shared `Logo` component
+* The name is written **Velora** in running text and **VELORA** in the wordmark
 
 The wordmark should feel:
 
@@ -122,35 +130,32 @@ Avoid overly decorative branding.
 
 # 4. Visual Direction
 
-Design VEROLA as a premium cinematic product.
+Design VELORA as a premium cinematic product on the "Cognitive Deep-Blue Glass" system defined in `DESIGN.md`: an ultra-refined dark experience of deep midnight navy and luminous photonic blues, combining crisp minimalism with **controlled glassmorphism**.
 
 Use:
 
-* Strong movie imagery
-* Generous whitespace
-* Clear hierarchy
-* Clean typography
-* Restrained borders
-* Soft visual layering
-* Carefully controlled gradients
-* Subtle depth
+* Strong movie imagery — artwork is always the focal point
+* Atmospheric depth: an obsidian-navy canvas with a faint ambient blue glow
+* Glass surfaces where they add structure: navigation bars, content panels, overlays
+* Razor-thin 1px micro-borders on translucent layers
+* Electric illumination: cobalt and sky-blue accents to direct the eye, and to mark hover, focus and active states
+* Chromatic glow and soft layered shadows in place of harsh drop shadows
+* Calibrated spacing on an 8px rhythm, with generous section spacing
+* Clear hierarchy and clean geometric typography
 * High-quality poster presentation
-* Elegant transitions
-* Consistent spacing
+* Short, elegant transitions
 
 Avoid:
 
-* Excessive glassmorphism
-* Excessive gradients
-* Neon overload
-* Heavy borders
-* Huge shadows
-* Too many rounded containers
-* Excessive badges
+* Glass around everything — posters stay bare; glass belongs to chrome and content panels
+* Stacked heavy blurs
+* Neon overload — glow is reserved for hover, focus and active states
+* Heavy borders and huge shadows
+* Excessive badges — eyebrow pills only for featured content and category tags
 * Dashboard-style boxes everywhere
 * Visual clutter
 * Over-animation
-* Generic AI-generated SaaS aesthetics
+* Generic AI-generated SaaS aesthetics — no "AI" motifs; this is entertainment
 
 This is an entertainment experience, not an analytics dashboard.
 
@@ -158,46 +163,58 @@ This is an entertainment experience, not an analytics dashboard.
 
 # 5. Theme
 
-Start with a premium **dark cinematic theme**.
+VELORA is a **dark-only** product for now: movie artwork and trailers benefit from a dark environment.
 
-Dark mode should be the primary initial experience because movie artwork and trailers benefit from a darker environment.
+Structure the design tokens so a future light theme remains possible, and do NOT hard-code colours in components. Components use these semantic tokens, defined in `app/globals.css` from `DESIGN.md`:
 
-However, structure the design tokens so a future light theme remains possible.
+| Token | Value | `DESIGN.md` name | Use |
+| --- | --- | --- | --- |
+| `background` | `#070B14` | canvas-default | Page canvas |
+| `canvas-subtle` | `#0A0F1D` | canvas-subtle | Footer, input fill, artwork placeholders |
+| `surface` | `rgba(255,255,255,0.04)` | surface-glass | Glass panels (layer 1) |
+| `surface-elevated` | `rgba(255,255,255,0.08)` | surface-glass-hover | Hover and raised glass |
+| `border` | `rgba(255,255,255,0.10)` | border-glass | 1px outlines and dividers |
+| `foreground` | `#FFFFFF` | text-primary | Headlines, key values |
+| `muted` | `#94A3B8` | text-secondary | Body copy, metadata, captions |
+| `accent` | `#2563EB` | primary | Primary actions |
+| `accent-hover` | `#1D4ED8` | primary-hover | Pressed / hover fill |
+| `accent-foreground` | `#FFFFFF` | — | Text on `accent` |
+| `highlight` | `#38BDF8` | secondary | Focus, active navigation, eyebrows, hover edges |
+| `tertiary` | `#60A5FA` | tertiary | Gradient endpoints, feature highlights |
+| `destructive` | `#FFB4AB` | error | Error emphasis |
+| `star` | `#F59E0B` | — | Rating stars only |
 
-Do NOT hard-code colors throughout components.
+Rules:
 
-Use semantic design tokens such as:
+* The palette is one blue family with a clear job for each step. Do not add other hues.
+* Use **cobalt (`accent`) for primary actions only** — ideally one per view.
+* Use **sky (`highlight`) for state**: focus rings, the active navigation indicator, eyebrow pills, and hover edges (`rgba(56,189,248,0.4)`).
+* `star` is the single non-palette colour: a star is read as a rating the world over.
+* Where `DESIGN.md`'s YAML front matter and its Colors section differ (e.g. `background` `#0F131D` vs canvas-default `#070B14`), the **Colors section wins**.
 
-```text
-background
-surface
-surface-elevated
-foreground
-muted
-border
-accent
-accent-foreground
-destructive
-```
-
-Keep the palette restrained.
-
-Use one recognizable VEROLA accent color rather than many competing accent colors.
-
-The accent should be used intentionally for:
-
-* Primary actions
-* Active navigation
-* Focus states
-* Important highlights
-
-Do not apply the accent to everything.
+Accessibility adjustment: `DESIGN.md`'s `text-muted` (`#64748B`) measures only 4.1:1 on the canvas, below WCAG AA for small text, so captions and inactive labels use `muted` (`#94A3B8`, 7.5:1) instead. White on `accent` is 5.2:1.
 
 ---
 
 # 6. Typography
 
-Typography should feel contemporary and editorial.
+**Plus Jakarta Sans** is the only typeface: contemporary geometric precision with humanist balance. It is loaded as a single variable font (weights 400–800).
+
+Headlines and display text are bold and tight-tracked (negative letter-spacing) for authority and impact; body copy uses neutral slate and generous line height to reduce fatigue in dark mode.
+
+The scale below is defined in `DESIGN.md` and available as theme utilities (`text-display-hero`, `text-headline-sm`, …):
+
+| Role | Token | Size / line | Weight |
+| --- | --- | --- | --- |
+| Hero title | `display-hero` (mobile: `display-hero-mobile`) | 56/64 (36/44) | 800 |
+| Page title | `headline-lg` (mobile: `headline-md`) | 40/48 (28/36) | 700 |
+| Section title | `headline-sm` | 20/28 | 600 |
+| Movie title | `body-md` | 15/24 | 600 |
+| Body copy | `body-md`; `body-lg` for hero and detail overview from 768px | 15/24; 18/28 | 400 |
+| Metadata | `body-sm` | 13/20 | 400 |
+| Buttons, navigation, tabs | `label-lg` | 14/20 | 600 |
+| Supporting labels | `label-md` | 12/16 | 600, +0.05em |
+| Eyebrows and category chips | `label-tag`, uppercase | 11/14 | 700, +0.08em |
 
 Prioritize:
 
@@ -207,23 +224,9 @@ Prioritize:
 * Compact metadata
 * Excellent mobile readability
 
-Create obvious hierarchy between:
+Key narrative phrases in hero copy may shift from white to the sky-to-cobalt gradient (`#38BDF8` → `#2563EB`); use it sparingly.
 
-```text
-Hero title
-Page title
-Section title
-Movie title
-Metadata
-Body copy
-Supporting labels
-```
-
-Avoid excessive font weights and font sizes.
-
-Do not introduce multiple font families without a strong reason.
-
-Typography should remain lightweight and performant.
+Do not introduce a second font family. Typography should remain lightweight and performant.
 
 ---
 
@@ -271,14 +274,14 @@ For example:
 Desktop navigation may use:
 
 ```text
-VEROLA    Home    Movies    TV Shows    Discover           Search    Profile
+VELORA    Home    Movies    TV Shows    Discover           Search    Profile
 ```
 
 while mobile can use a compact top bar plus bottom navigation:
 
 ```text
 ┌───────────────────────────┐
-│ VEROLA               🔍   │
+│ VELORA               🔍   │
 │                           │
 │        Content            │
 │                           │
@@ -295,7 +298,7 @@ Choose the best information architecture based on the existing application.
 
 # 9. Homepage
 
-The homepage should immediately communicate that VEROLA is a movie discovery platform.
+The homepage should immediately communicate that VELORA is a movie discovery platform.
 
 Consider this hierarchy:
 
@@ -344,9 +347,9 @@ Example conceptual hierarchy:
 ```text
                      cinematic backdrop
 
-VEROLA FEATURED
+[• FEATURED]   <- eyebrow pill: sky text, cobalt tint, sky border
 
-DUNE: PART TWO
+Dune: Part Two
 
 2024   ★ 8.3   Sci-Fi · Adventure
 
@@ -360,6 +363,8 @@ his family.
 Do not overload the hero with metadata.
 
 Use gradients carefully to maintain text readability over artwork.
+
+The hero title uses `display-hero`; the primary CTA is solid cobalt and the secondary action is a glass button (see `DESIGN.md` → Buttons). Carousel controls are glass with a sky active state.
 
 The hero should scale gracefully on mobile.
 
@@ -391,6 +396,8 @@ Keep metadata restrained.
 Do not place large containers around posters unnecessarily.
 
 Poster artwork should remain dominant.
+
+Posters use the large radius (16px) and a 1px glass border. On hover the poster lifts slightly and gains a sky edge with a soft cobalt glow; the same title, year and rating are always visible without hover. Titles without artwork fall back to a blue gradient carrying the title — never a different card.
 
 Maintain correct movie poster aspect ratios.
 
@@ -461,7 +468,7 @@ On mobile, consider a dedicated search experience rather than squeezing a large 
 Example:
 
 ```text
-Search VEROLA
+Search VELORA
 ┌─────────────────────────────┐
 │ 🔍 Search movies & shows... │
 └─────────────────────────────┘
@@ -582,6 +589,8 @@ Watchlist
 
 Search should remain prominent.
 
+The top bar (desktop) and bottom tab bar (mobile) are the product's glass chrome: translucent canvas with backdrop blur and a 1px glass border. The active destination is marked by a sky indicator as well as a brighter label, never colour alone.
+
 User/profile functionality should be accessible without dominating navigation.
 
 On mobile, prioritize the destinations users need most frequently.
@@ -647,7 +656,7 @@ Do not expose technical errors to end users.
 
 # 21. Performance
 
-VEROLA must remain lightweight.
+VELORA must remain lightweight.
 
 Visual sophistication must NOT come at the cost of excessive JavaScript.
 
@@ -677,7 +686,7 @@ Before adding ANY dependency, verify that:
 
 # 22. Images and Performance
 
-VEROLA is image-heavy.
+VELORA is image-heavy.
 
 Treat image performance as a core design requirement.
 
@@ -746,46 +755,61 @@ Never rely solely on color to communicate state.
 
 # 25. Design System
 
-Establish a small coherent design system.
-
-Define:
+The design system is `DESIGN.md`. Keep it small and coherent, and simple enough for a future React Native implementation.
 
 ### Color
 
-Semantic color tokens.
+Semantic tokens from section 5. Layers: canvas (`background`) → glass (`surface`) → raised glass (`surface-elevated`).
 
 ### Typography
 
-A small hierarchy.
+Plus Jakarta Sans and the scale in section 6.
 
 ### Spacing
 
-Use a consistent spacing scale.
+An 8px base rhythm.
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `space-xs` … `space-xl` | 4, 8, 16, 24, 40px | Component internals |
+| `space-2xl` | 64px | Between major sections (desktop; 48px on phones) |
+| Page margin | 20px phones, 40px from 768px | Outer gutter |
+| Grid gutter | 16px phones, 24px above | Between cards |
+| Max content width | 1280px | Centred container |
+
+Breakpoints follow `DESIGN.md`: mobile below 768px (4-column flow), tablet 768–1199px, desktop 1200px and up (12-column).
 
 ### Radius
 
-Use a restrained radius system.
+| Token | Value | Use |
+| --- | --- | --- |
+| `default` | 8px | Buttons, inputs, list thumbnails, popovers |
+| `md` | 12px | Small panels |
+| `lg` | 16px | Posters, glass panels, trailer, modals |
+| `full` | pill | Category chips, status pills, avatars |
 
-Do not make every element excessively rounded.
+Do not make every element rounded: controls stay at 8px.
 
 ### Elevation
 
-Use minimal elevation.
+Depth comes from translucent layers and chromatic glow, not heavy drop shadows.
+
+* **Layer 0 — canvas:** matte `#070B14`, with an optional faint radial glow such as `radial-gradient(ellipse at 80% 40%, rgba(37,99,235,0.12), transparent 60%)`.
+* **Layer 1 — glass:** `rgba(255,255,255,0.04)`, 16px blur, 1px border `rgba(255,255,255,0.08–0.10)`.
+* **Layer 2 — floating:** raised surfaces with `0 12px 32px -4px rgba(0,0,0,0.6), 0 0 24px rgba(37,99,235,0.15)`.
 
 ### Interaction states
 
-Define:
+| State | Buttons and controls |
+| --- | --- |
+| default | Primary: solid cobalt, white text. Secondary: glass fill, 1px glass border |
+| hover | Primary: `#1D4ED8` plus a `0 0 20px rgba(37,99,235,0.4)` halo. Secondary: border `rgba(56,189,248,0.4)`, fill `rgba(255,255,255,0.08)` |
+| focus | Sky (`#38BDF8`) ring; inputs take a sky border with `0 0 0 3px rgba(56,189,248,0.2)` |
+| active | Pressed fill (`#1D4ED8` or raised glass) |
+| disabled | 50% opacity, no pointer events |
+| loading | Skeletons that match final geometry; a text change (e.g. "Retrying…") for buttons |
 
-```text
-default
-hover
-focus
-active
-disabled
-loading
-```
-
-The system should remain simple enough for future React Native implementation.
+Inputs: `canvas-subtle` fill at 80%, 1px glass border, white text, placeholder in a lightened `muted`.
 
 ---
 
@@ -834,11 +858,11 @@ Potential examples:
 * Input
 * Skeleton
 
-Do not turn VEROLA into a generic shadcn dashboard.
+Do not turn VELORA into a generic shadcn dashboard.
 
 shadcn should provide underlying primitives.
 
-VEROLA's visual identity should come from our design system and content.
+VELORA's visual identity should come from our design system and content.
 
 ---
 
@@ -864,7 +888,7 @@ Keep `"use client"` boundaries narrow.
 
 # 29. Mobile App Future
 
-Remember that VEROLA is expected to eventually have:
+Remember that VELORA is expected to eventually have:
 
 ```text
 Expo + React Native
@@ -899,7 +923,9 @@ Netflix-like navigation
 identical horizontal carousels everywhere
 ```
 
-VEROLA needs its own identity.
+VELORA needs its own identity.
+
+That identity is the deep-blue glass system in `DESIGN.md`: obsidian-navy canvas, cobalt and sky illumination, translucent layers, and Plus Jakarta Sans — applied to movie artwork rather than to product dashboards.
 
 Use thoughtful:
 
@@ -952,7 +978,7 @@ Can keyboard and assistive-technology users operate it?
 
 ### Consistency
 
-Does this feel like the same VEROLA product?
+Does this feel like the same VELORA product?
 
 ---
 
@@ -976,7 +1002,7 @@ Inspect the existing application and identify:
 
 ### Step 2 — Establish Design Direction
 
-Define the VEROLA visual language:
+Define the VELORA visual language:
 
 * Colors
 * Typography
@@ -1055,9 +1081,9 @@ DO:
 
 # 34. Desired Result
 
-The final VEROLA experience should feel like a product that could credibly ship globally.
+The final VELORA experience should feel like a product that could credibly ship globally.
 
-When someone opens VEROLA, the impression should be:
+When someone opens VELORA, the impression should be:
 
 > "This feels like a real entertainment product."
 
@@ -1073,4 +1099,4 @@ The strongest elements should be:
 
 rather than excessive effects.
 
-Build a distinctive, responsive, cinematic experience while keeping the implementation simple, reusable, performant, and ready for VEROLA's eventual transition into a native mobile application.
+Build a distinctive, responsive, cinematic experience while keeping the implementation simple, reusable, performant, and ready for VELORA's eventual transition into a native mobile application.
