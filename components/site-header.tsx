@@ -1,0 +1,51 @@
+import Link from "next/link";
+import { Search } from "lucide-react";
+import { HeaderSearch } from "@/components/header-search";
+import { NavLink } from "@/components/nav-link";
+
+const NAV_ITEMS = [
+  { href: "/", label: "Home" },
+  { href: "/movies", label: "Movies" },
+  { href: "/tv", label: "TV Shows" },
+  { href: "/trending", label: "Trending" },
+  { href: "/my-list", label: "My List" },
+];
+
+export function SiteHeader() {
+  return (
+    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur">
+      <div className="page-container flex h-14 items-center gap-8 md:h-16">
+        <Link href="/" className="text-xl font-semibold tracking-tight">
+          Verola
+        </Link>
+
+        <nav aria-label="Primary" className="hidden md:block">
+          <ul className="flex items-center gap-1">
+            {NAV_ITEMS.map((item) => (
+              <li key={item.href}>
+                <NavLink
+                  href={item.href}
+                  className="relative inline-flex min-h-11 items-center px-3 text-sm text-muted transition-colors hover:text-foreground"
+                  activeClassName="text-foreground after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:rounded-full after:bg-accent"
+                >
+                  {item.label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="ml-auto flex items-center">
+          <HeaderSearch />
+          <Link
+            href="/search"
+            aria-label="Search"
+            className="-mr-2 grid size-11 place-items-center rounded-full text-foreground transition-colors hover:bg-surface-elevated md:hidden"
+          >
+            <Search aria-hidden className="size-5" />
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
