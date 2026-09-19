@@ -13,6 +13,7 @@ export default function Error({ error, retry }: { error: Error & { digest?: stri
   return (
     <div className="page-container py-12">
       <EmptyState
+        as="h1"
         icon={<TriangleAlert className="size-6" />}
         title="Something went wrong"
         description="We couldn't load this right now. Please try again."

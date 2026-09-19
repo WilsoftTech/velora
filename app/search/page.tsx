@@ -9,7 +9,7 @@ import { SearchInput } from "@/components/search-input";
 import { ListSkeleton } from "@/components/skeletons";
 import { TabLinks } from "@/components/tab-links";
 import { getTrending, searchMedia } from "@/lib/tmdb/media";
-import { firstParam, parseSearchScope } from "@/lib/utils";
+import { firstParam, normalizeSearchQuery, parseSearchScope } from "@/lib/utils";
 import type { SearchScope } from "@/types/media";
 
 export const metadata: Metadata = { title: "Search" };
@@ -94,7 +94,7 @@ async function TrendingSearches() {
 
 export default async function SearchPage({ searchParams }: PageProps<"/search">) {
   const params = await searchParams;
-  const query = (firstParam(params.q) ?? "").trim();
+  const query = normalizeSearchQuery(firstParam(params.q));
   const scope = parseSearchScope(params.type);
 
   return (

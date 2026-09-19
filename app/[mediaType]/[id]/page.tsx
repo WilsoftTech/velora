@@ -10,19 +10,24 @@ import { SectionHeader } from "@/components/section-header";
 import { TrailerPlayer } from "@/components/trailer-player";
 import { WatchlistButton } from "@/components/watchlist-button";
 import { getMediaDetail } from "@/lib/tmdb/media";
-import { formatRuntime, mediaTypeLabel, parseMediaType, summarize, toSummary } from "@/lib/utils";
+import { formatRuntime, mediaTypeLabel, parseMediaRoute, summarize, toSummary } from "@/lib/utils";
 
 async function loadDetail(mediaType: string, rawId: string) {
-  const type = parseMediaType(mediaType);
-  const id = Number(rawId);
-  if (!type || !Number.isInteger(id) || id <= 0) return null;
-  return getMediaDetail(type, id);
+  const route = parseMediaRoute(mediaType, rawId);
+  return route ? getMediaDetail(route.mediaType, route.id) : null;
 }
 
 export async function generateMetadata({ params }: PageProps<"/[mediaType]/[id]">): Promise<Metadata> {
   const { mediaType, id } = await params;
-  const detail = await loadDetail(mediaType, id);
-  if (!detail) return {};
+  let detail;
+  try {
+    detail = await loadDetail(mediaType, id);
+  } catch (error) {
+    // Without this, a TMDB outage leaves the error page with no <title> at all.
+    console.error(`Could not load metadata for ${mediaType}/${id}`, error);
+    return { title: "Title unavailable", robots: { index: false } };
+  }
+  if (!detail) return { title: "Title not found" };
 
   const description = summarize(detail.overview);
   return {
@@ -41,6 +46,10 @@ export async function generateMetadata({ params }: PageProps<"/[mediaType]/[id]"
 export default async function MediaDetailPage({ params }: PageProps<"/[mediaType]/[id]">) {
   const { mediaType, id } = await params;
   const detail = await loadDetail(mediaType, id);
+  // The HTTP status is already 200 by now: the loading boundaries above this page
+  // stream the shell before TMDB has answered. Next.js marks the response `noindex`
+  // instead, and generateMetadata gives it a stable title. Removing the skeletons
+  // (or awaiting TMDB in a layout) would be the only way to get a 404 status.
   if (!detail) notFound();
 
   const facts = [
@@ -117,15 +126,23 @@ export default async function MediaDetailPage({ params }: PageProps<"/[mediaType
         )}
 
         {detail.cast.length > 0 && (
-          <section aria-labelledby="cast-heading">
+          <section>
             <SectionHeader id="cast-heading" title="Cast" />
-            <ul className="page-bleed no-scrollbar relative flex gap-4 overflow-x-auto pb-1 sm:gap-6">
-              {detail.cast.map((person) => (
-                <li key={person.id} className="w-24 shrink-0 sm:w-28">
-                  <PersonCard person={person} />
-                </li>
-              ))}
-            </ul>
+            {/* Cast cards are not links, so the scroller itself must be focusable for keyboard users to scroll it. */}
+            <div
+              role="region"
+              aria-labelledby="cast-heading"
+              tabIndex={0}
+              className="page-bleed no-scrollbar relative overflow-x-auto pb-1 focus-visible:outline-offset-[-2px]"
+            >
+              <ul className="flex gap-4 md:gap-6">
+                {detail.cast.map((person) => (
+                  <li key={person.id} className="w-24 shrink-0 sm:w-28">
+                    <PersonCard person={person} />
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
         )}
 

@@ -6,10 +6,12 @@ interface EmptyStateProps {
   description?: string;
   /** Recovery action, e.g. a link or "Try again" button. */
   children?: ReactNode;
+  /** Use "h1" when the state replaces the whole page (404, error boundary). */
+  as?: "h1" | "h2";
 }
 
 /** Glass panel shared by empty lists, no-result searches, and error boundaries. */
-export function EmptyState({ icon, title, description, children }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, children, as: Heading = "h2" }: EmptyStateProps) {
   return (
     <div className="mx-auto my-8 flex max-w-md flex-col items-center rounded-lg border border-border bg-surface px-6 py-12 text-center backdrop-blur-md">
       {icon && (
@@ -20,7 +22,7 @@ export function EmptyState({ icon, title, description, children }: EmptyStatePro
           {icon}
         </div>
       )}
-      <h2 className="text-headline-sm">{title}</h2>
+      <Heading className="text-headline-sm">{title}</Heading>
       {description && <p className="mt-2 text-body-md text-muted">{description}</p>}
       {children && <div className="mt-6">{children}</div>}
     </div>

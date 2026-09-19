@@ -10,6 +10,7 @@ import type {
 import { isTmdbConfigured, tmdbFetch, tmdbFetchPage } from "./client";
 import { genreNames, shortGenreName } from "./genres";
 import { sampleDetail, sampleMedia } from "./sample";
+import { normalizeSearchQuery } from "@/lib/utils";
 import type { TmdbDetail, TmdbPaged, TmdbResult } from "./types";
 
 const YOUTUBE_KEY = /^[\w-]{6,20}$/;
@@ -78,7 +79,8 @@ export async function getShows(list: BrowseList, page = 1): Promise<MediaPage> {
   return toMediaPage(await tmdbFetchPage<TmdbResult>(`/tv/${list}`, { page }), "tv");
 }
 
-export async function searchMedia(query: string, scope: SearchScope = "all"): Promise<MediaPage> {
+export async function searchMedia(rawQuery: string, scope: SearchScope = "all"): Promise<MediaPage> {
+  const query = normalizeSearchQuery(rawQuery);
   if (usingSampleData()) {
     return samplePage(sampleMedia({ mediaType: scope === "all" ? undefined : scope, search: query }), 1);
   }

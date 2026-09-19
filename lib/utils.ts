@@ -58,3 +58,24 @@ export function parseSearchScope(value: SearchParamValue): SearchScope {
 export function parseMediaType(value: string): MediaType | null {
   return value === "movie" || value === "tv" ? value : null;
 }
+
+/**
+ * Validates the `/[mediaType]/[id]` params without any network call. Digits
+ * only, so "1e3" or "0x10" cannot alias another title's URL.
+ */
+export function parseMediaRoute(mediaType: string, rawId: string): { mediaType: MediaType; id: number } | null {
+  const type = parseMediaType(mediaType);
+  const id = /^\d+$/.test(rawId) ? Number(rawId) : Number.NaN;
+  return type && Number.isSafeInteger(id) && id > 0 ? { mediaType: type, id } : null;
+}
+
+/** Longest search query that is forwarded to TMDB. */
+export const MAX_SEARCH_LENGTH = 100;
+
+/**
+ * Trims and caps a search query. Counts code points rather than UTF-16 units so
+ * an emoji is never cut in half (a lone surrogate makes encodeURIComponent throw).
+ */
+export function normalizeSearchQuery(value: string | undefined) {
+  return Array.from((value ?? "").trim()).slice(0, MAX_SEARCH_LENGTH).join("").trim();
+}

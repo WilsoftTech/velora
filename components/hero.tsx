@@ -15,8 +15,9 @@ function HeroSlide({ item, first }: { item: Media; first: boolean }) {
   return (
     <div className="relative h-[26rem] sm:h-[30rem] lg:h-[36rem]">
       <BackdropImage path={item.backdropPath} sizes="100vw" preload={first} />
-      {/* Bottom fade keeps text legible; the side fade only matters once the copy sits left of the artwork. */}
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-background/10" />
+      {/* The fade keeps text legible over any artwork. Phones stack the copy over most of the hero, so they need
+          a denser scrim (WCAG AA against a pure-white backdrop); the side fade only matters once copy sits left. */}
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-background via-background/75 via-60% to-background/45 md:via-background/50 md:via-50% md:to-background/10" />
       <div aria-hidden className="absolute inset-0 hidden bg-gradient-to-r from-background/80 via-background/20 to-transparent md:block" />
 
       <div className="page-container relative flex h-full flex-col justify-end pb-12 md:pb-16">

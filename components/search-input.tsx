@@ -3,6 +3,7 @@
 import { useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, X } from "lucide-react";
+import { MAX_SEARCH_LENGTH } from "@/lib/utils";
 import type { SearchScope } from "@/types/media";
 
 const DEBOUNCE_MS = 300;
@@ -83,6 +84,7 @@ export function SearchInput({ query, scope }: SearchInputProps) {
         name="q"
         type="search"
         defaultValue={query}
+        maxLength={MAX_SEARCH_LENGTH}
         autoFocus={!query}
         autoComplete="off"
         autoCapitalize="off"
