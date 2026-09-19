@@ -69,6 +69,17 @@ export function parseMediaRoute(mediaType: string, rawId: string): { mediaType: 
   return type && Number.isSafeInteger(id) && id > 0 ? { mediaType: type, id } : null;
 }
 
+/**
+ * A `next` redirect target taken from a URL or form, reduced to a same-origin
+ * path. Anything else (absolute URLs, `//host`, backslash tricks, control
+ * characters) falls back, so sign-in can never bounce a user to another site.
+ */
+export function safeRedirectPath(value: string | null | undefined, fallback = "/") {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return fallback;
+  if (value.includes("\\") || /[\u0000-\u001f\u007f]/.test(value)) return fallback;
+  return new URL(value, "http://velora.invalid").origin === "http://velora.invalid" ? value : fallback;
+}
+
 /** Longest search query that is forwarded to TMDB. */
 export const MAX_SEARCH_LENGTH = 100;
 

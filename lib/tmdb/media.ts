@@ -4,13 +4,15 @@ import type {
   Media,
   MediaDetail,
   MediaPage,
+  MediaRef,
+  MediaSummary,
   MediaType,
   SearchScope,
 } from "@/types/media";
 import { isTmdbConfigured, tmdbFetch, tmdbFetchPage } from "./client";
 import { genreNames, shortGenreName } from "./genres";
 import { sampleDetail, sampleMedia } from "./sample";
-import { normalizeSearchQuery } from "@/lib/utils";
+import { normalizeSearchQuery, toSummary } from "@/lib/utils";
 import type { TmdbDetail, TmdbPaged, TmdbResult } from "./types";
 
 const YOUTUBE_KEY = /^[\w-]{6,20}$/;
@@ -110,6 +112,34 @@ function toCast(credits: TmdbDetail["credits"]): CastMember[] {
     character: person.character ?? "",
     profilePath: person.profile_path ?? null,
   }));
+}
+
+const SUMMARY_BATCH = 20;
+
+/**
+ * Card-sized data for a set of saved titles, in the order given. TMDB stays the
+ * source of truth: only ids are stored, and these lookups ride the same hourly
+ * fetch cache as every other TMDB call. Titles TMDB no longer has are dropped;
+ * any other failure throws, so a flaky lookup can never look like a shorter list.
+ */
+export async function getMediaSummaries(refs: MediaRef[]): Promise<MediaSummary[]> {
+  const summaries: (MediaSummary | null)[] = [];
+  // Small batches keep a long list from bursting past TMDB's rate limit.
+  for (let start = 0; start < refs.length; start += SUMMARY_BATCH) {
+    const batch = refs.slice(start, start + SUMMARY_BATCH);
+    summaries.push(...(await Promise.all(batch.map(getMediaSummary))));
+  }
+  return summaries.flatMap((summary) => summary ?? []);
+}
+
+async function getMediaSummary({ mediaType, id }: MediaRef): Promise<MediaSummary | null> {
+  if (usingSampleData()) {
+    const sample = sampleDetail(mediaType, id);
+    return sample && toSummary(sample);
+  }
+  const raw = await tmdbFetch<TmdbResult>(`/${mediaType}/${id}`);
+  const media = raw && toMedia(raw, mediaType);
+  return media && toSummary(media);
 }
 
 export async function getMediaDetail(mediaType: MediaType, id: number): Promise<MediaDetail | null> {

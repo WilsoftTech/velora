@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
+import { AccountLink } from "@/components/account-link";
 import { HeaderSearch } from "@/components/header-search";
 import { Logo } from "@/components/logo";
 import { NavLink } from "@/components/nav-link";
@@ -41,10 +42,11 @@ export function SiteHeader() {
           <Link
             href="/search"
             aria-label="Search"
-            className="-mr-2 grid size-11 place-items-center rounded-default text-foreground transition-colors hover:bg-surface-elevated md:hidden"
+            className="grid size-11 place-items-center rounded-default text-foreground transition-colors hover:bg-surface-elevated md:hidden"
           >
             <Search aria-hidden className="size-5" />
           </Link>
+          <AccountLink />
         </div>
       </div>
     </header>

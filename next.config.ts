@@ -1,5 +1,14 @@
 import type { NextConfig } from "next";
 
+// Without these, accounts silently vanish from a deploy. Only enforced for real
+// production deploys so a fresh clone (or CI) still builds as a guest-only app.
+if (
+  process.env.VERCEL_ENV === "production" &&
+  !(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)
+) {
+  throw new Error("Production build needs NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.");
+}
+
 const nextConfig: NextConfig = {
   images: {
     // TMDB already serves pre-sized images from its CDN, so a custom loader
