@@ -1619,4 +1619,40 @@ Do NOT install the complete future stack at once.
 
 ---
 
-# 8. Archite
+# 8. Architecture Guardrails
+
+<!-- The original section was cut off after "# 8. Archite". This was drafted from decisions already stated in this roadmap and in AGENTS.md; edit or replace it freely. -->
+
+The architecture stays deliberately small. These guardrails restate decisions made elsewhere in this document and in `AGENTS.md`, so every phase builds on the same shape.
+
+## 8.1 Layers
+
+```text
+UI            Server Components first; small client islands
+   ↓
+Feature logic watchlist, search, discovery (no framework imports)
+   ↓
+Data access   TMDB client now; Supabase from Phase 2 (server-side only)
+   ↓
+Services      TMDB, Supabase, later monitoring and analytics
+```
+
+* Presentation components receive domain types; they do not call TMDB or Supabase directly.
+* Secrets stay on the server. Only `NEXT_PUBLIC_*` values are safe for the browser.
+* Authorization is enforced by the server and the database (RLS from Phase 2), never by hiding UI.
+
+## 8.2 Data
+
+* TMDB is the source of truth for media metadata; Velora stores identifiers plus user data (Phase 2.4).
+* Domain types (`types/media.ts`) are independent of TMDB response shapes. Mapping happens at the data-access boundary.
+* Respect TMDB's terms: keep the required attribution visible and do not cache TMDB content for longer than they allow.
+
+## 8.3 Portability
+
+Logic that may be shared with a future Expo client (Phase 5.6): types, schemas, API contracts, business logic, constants and utilities. UI is not shared for its own sake, and the repository does not become a monorepo until native work begins.
+
+## 8.4 Change discipline
+
+* Reuse before create (`AGENTS.md`): one component per concept.
+* Add a dependency only when it solves a current problem, in the phase that needs it (section 7).
+* Release gate: from a fresh clone, `npm ci` → lint → typecheck → build must pass before a phase is called complete.

@@ -1062,4 +1062,4 @@ NEW DEPENDENCY
 
 in that order.
 
-The Modern Movie App should remain fast, lightweight, responsive, understandable, and easy to evolve into a native mobile application.
+Velora should remain fast, lightweight, responsive, understandable, and easy to evolve into a native mobile application.

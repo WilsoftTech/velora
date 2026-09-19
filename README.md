@@ -27,4 +27,8 @@ Set `TMDB_ACCESS_TOKEN` (v4 read-access token) or `TMDB_API_KEY` (v3 key) in `.e
 
 ## Scripts
 
-`npm run dev` · `npm run build` · `npm run lint` · `npx tsc --noEmit`
+`npm run dev` · `npm run build` · `npm run lint` · `npm run typecheck`
+
+Release gate, from a fresh clone: `npm ci` → `npm run lint` → `npm run typecheck` → `npm run build`.
+
+Attribution: this product uses TMDB and the TMDB APIs. The footer carries TMDB's required notice and logo; keep both when changing the footer.
