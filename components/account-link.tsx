@@ -31,13 +31,13 @@ export function AccountLink() {
 
   if (!isSupabaseConfigured()) return null;
 
-  const iconButton = "-mr-2 grid size-11 place-items-center rounded-default text-foreground transition-colors hover:bg-surface-elevated md:hidden";
+  const iconButton = "-mr-2 grid size-11 place-items-center rounded-default text-foreground transition-colors hover:bg-surface-elevated xl:hidden";
 
   return (
     <>
-      {/* Phones: one icon, same footprint in every state. */}
+      {/* Phones and tablets: one icon, same footprint in every state. The full buttons need xl-width to fit beside the nav and search. */}
       {session === "unknown" ? (
-        <span aria-hidden className="-mr-2 size-11 md:hidden" />
+        <span aria-hidden className="-mr-2 size-11 xl:hidden" />
       ) : session === "signed-in" ? (
         <Link href="/account" aria-label="Account" className={iconButton}>
           <User aria-hidden className="size-5" />
@@ -49,7 +49,7 @@ export function AccountLink() {
       )}
 
       {/* Desktop: the signed-out pair always sizes the box, hidden while it does not apply. */}
-      <div className="relative ml-4 hidden md:block">
+      <div className="relative ml-4 hidden xl:block">
         <div aria-hidden={session !== "signed-out"} className={cn("flex items-center gap-2", session !== "signed-out" && "invisible")}>
           <Link href="/sign-in" className={buttonClass("ghost", "px-3")}>
             Sign in

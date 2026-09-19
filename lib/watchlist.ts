@@ -45,6 +45,8 @@ const listeners = new Set<() => void>();
 
 function publish(patch: Partial<Snapshot>) {
   snapshot = { ...snapshot, ...patch };
+  // "Still loading" stops being true the moment the list arrives; don't leave it on screen.
+  if (snapshot.items && snapshot.mutationError?.error === "loading") snapshot = { ...snapshot, mutationError: null };
   listeners.forEach((listener) => listener());
 }
 
