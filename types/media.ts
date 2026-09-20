@@ -11,6 +11,9 @@ export interface MediaSummary {
   rating: number | null;
 }
 
+/** Identity of a title: all that is persisted for a saved item. */
+export type MediaRef = Pick<MediaSummary, "id" | "mediaType">;
+
 export interface Media extends MediaSummary {
   overview: string;
   backdropPath: string | null;
