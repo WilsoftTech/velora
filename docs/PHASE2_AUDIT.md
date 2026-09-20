@@ -29,7 +29,7 @@ Both Supabase clients use only the URL and the publishable key. `SUPABASE_SERVIC
 | Providers | **VERIFIED** email/password only; sign-up open; anonymous sign-ins off; no OAuth |
 | Custom SMTP | **VERIFIED working**: confirmation mails were delivered for three sign-ups. (The built-in mailer's rate limit and rejected recipients blocked the first attempts.) |
 | Exposed schemas | **VERIFIED** `public` and `graphql_public` only |
-| Migration history | **VERIFIED** the migrations were applied directly over Postgres. The CLI history table (`supabase_migrations.schema_migrations`) does not exist, so they are not tracked by `supabase migration` |
+| Migration history | **VERIFIED, reconciled 2026-09-20.** The migrations were originally applied directly over Postgres, so the CLI history table did not exist. After re-inspecting the live database, `supabase migration repair --status applied` recorded both versions (`20260919000000`, `20260920000000`); `supabase migration list` shows local and remote in sync (see "Live re-inspection" below) |
 
 ## Database
 
@@ -41,6 +41,19 @@ Migrations in the repo (both applied to the live project):
 Live catalog (**VERIFIED**): `profiles` (PK `id` → `auth.users` ON DELETE CASCADE; `display_name` 1–50 chars; `avatar_url` ≤ 2048; timestamps) and `watchlist_items` (`user_id` defaults to `auth.uid()`, cascade FK; `tmdb_id > 0`; `media_type` in `movie`/`tv`; `UNIQUE (user_id, media_type, tmdb_id)` doubling as the lookup index). RLS enabled on both; five policies, all `TO authenticated` and comparing `(select auth.uid())`. Triggers: `on_auth_user_created` (profile row), `profiles_set_updated_at`, `watchlist_items_enforce_limit`. `handle_new_user` is `SECURITY DEFINER` with an empty `search_path` and no client `EXECUTE`.
 
 Grants (**VERIFIED**): `anon` has nothing. `authenticated`: SELECT and column-level UPDATE(`display_name`) on `profiles`; SELECT, INSERT, DELETE on `watchlist_items` (no UPDATE).
+
+### Live re-inspection and migration-history reconciliation (2026-09-20)
+
+The live database was re-inspected from scratch rather than relying on the earlier pass: a read-only transaction of catalog `SELECT`s (61 checks, all passing), with the function bodies compared programmatically against the SQL in the repository migrations. No application data or schema was modified.
+
+| Area | Result |
+| --- | --- |
+| Migration 1 schema | **VERIFIED** tables, columns and defaults, PK/FK/CHECK/UNIQUE constraints and indexes, RLS enabled on both tables, exactly the five expected policies (`PERMISSIVE`, `TO authenticated`, `(select auth.uid())` predicates), effective grants (`anon` none; `authenticated` as above; no `PUBLIC` grants), the three triggers, and the `private` schema (no client `USAGE`) holding exactly three functions |
+| Function properties | **VERIFIED** `handle_new_user` is `SECURITY DEFINER` with an empty `search_path` and no `EXECUTE` for `anon`, `authenticated` or `PUBLIC`. `set_updated_at` and `enforce_watchlist_limit` are not `SECURITY DEFINER` and also have an empty `search_path` |
+| Migration 2 (`enforce_watchlist_limit`) | **VERIFIED** the live body matches `20260920000000_watchlist_limit_lock.sql` (whitespace-normalised) and differs from the original version in migration 1. It takes a per-user `pg_advisory_xact_lock` (key `velora.watchlist:<user_id>`) after the existing-title early return and before the count, enforces `>= 500`, and raises `23514`. No policy or grant changes are associated with it |
+| History bookkeeping | Before: `supabase_migrations.schema_migrations` did not exist and `migration list` showed both migrations as local-only. `migration repair --status applied 20260919000000 20260920000000` created the table and recorded exactly those two versions. After: `migration list` shows both as applied remotely, and a read-only query shows only those two rows. Neither migration was re-executed |
+
+The caveat that `service_role` keeps Supabase's default full table grants is unchanged and irrelevant to client access: it bypasses RLS and its key is never used by the app.
 
 ## The 500-title cap: a race was found and fixed
 
@@ -131,7 +144,7 @@ Each user: reads only their own profile and watchlist; updating another user's p
 
 ## Known limitations and technical debt
 
-1. **Migrations are not in Supabase CLI history.** They exist in the live database and in `supabase/migrations/`, but were applied directly. Reconcile later with `supabase migration repair` (not attempted, per instruction).
+1. **Migration history: reconciled (2026-09-20).** Both Phase 2 migrations are now recorded as applied. Two follow-ups remain. Migrations applied later through the dashboard SQL editor are not recorded automatically, so each needs `supabase migration repair` (or should be applied through the CLI). And `DIRECT_URL` (`db.<ref>.supabase.co`) resolves to IPv6 only and is unreachable from an IPv4-only network, so CLI runs from such a machine need the session-pooler URL instead.
 2. **Header, 768–960px:** the desktop header was already over-constrained in the Phase 1 layout (with the account control removed, the logo shrinks to 43px at 768 and two nav labels wrap up to 900px). The account icon adds ~36–44px of pressure, so the logo is 7px at 768 and labels wrap up to 960px. Recommended fix: show the desktop nav and search from `lg` and keep the bottom nav until then. Not done: it changes Phase 1 layout.
 3. **Whole-list failure.** `readList` resolves every saved title against TMDB, and any non-404 failure fails the whole signed-in list. On the detail page the add button then says "Still loading your list" (no retry there; retry exists on My List). INSPECTED, not reproduced.
 4. **Dead TMDB ids** still count toward the 500 cap but are dropped from the list, so they cannot be removed in the UI (93 of 500 ids in the test set).
