@@ -133,3 +133,249 @@ Signed-in flows (authenticated My List, sign-in/out, account, guest-to-account m
 ### Quality gates (final tree)
 
 `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check`: see the Checkpoint 1 report.
+
+---
+
+## Checkpoint 2 — Search analytics: database architecture and migration
+
+**Status: migration APPLIED to the live project (night of 2026-09-20 to 2026-09-21, local time) and structurally/security-verified live (see "Applied and verified live").** Behaviour with real sessions, data and concurrency was then verified live too (see "Behavioural and adversarial verification (live)"). `DIRECT_URL` was never used; the service-role key was used only to create and delete two disposable test users during that verification.
+
+Extra legend for this section: **LOCAL** = exercised on a throwaway local Postgres (PGlite, no Supabase, no credentials). Evidence about the SQL, never a substitute for live verification.
+
+Migration: `supabase/migrations/20260920181819_search_analytics_and_history.sql`. Phase 1/2 migrations are untouched.
+
+### Repository state (resolved)
+
+Checkpoint 2 began in a checkout whose `main` (`dd35d7f`) was two commits **behind** `origin/main`, so Checkpoint 1 looked missing. It is not: it is commit `c5a9bbc` on `origin/phase3-discover`, on top of `origin/main` (`313e621`), which is on top of `dd35d7f`. The three histories are linear, nothing diverged, and nothing was lost or stashed. An earlier draft of this section, written against the stale checkout, created a second `docs/PHASE3_AUDIT.md`; this file replaces it and is the remote file plus this appended section. `313e621` also reconciled the Supabase CLI migration history for the two Phase 2 migrations (see "Applying").
+
+### Approved decisions
+
+`scope` in the history key `(user_id, scope, query)`; anonymous events with no identity; client island → Route Handler → `record_search`; no extra TMDB request to check `result_count`, which stays bounded and untrusted; a per-user advisory lock and an exact 20-row history bound; 7-day trending with a minimum of 3 events and an aggregate-only public RPC; a private event table with no client privileges; physical retention scheduling deferred; no new dependencies.
+
+### Design (INSPECTED)
+
+| Object | Purpose |
+| --- | --- |
+| `private.search_events` | Anonymous event log: canonical `query`, `scope`, untrusted `result_count`, `created_at`. No identity |
+| `public.search_history` | A signed-in user's 20 most recent searches; PK `(user_id, scope, query)`; `searched_at` |
+| `public.record_search(p_query, p_scope, p_result_count)` | The only writer of both tables. `SECURITY DEFINER`, returns `void` |
+| `public.trending_searches(p_limit)` | Aggregate-only read of the last 7 days. `SECURITY DEFINER` |
+| `private.normalize_search_query(text)` | The single normalization contract. Not callable by clients |
+| `private.purge_search_events(interval, integer)` | Bounded maintenance purge. Not callable by clients, **not scheduled** |
+
+**Events stay in `private`.** Migrations, RLS, indexes and the aggregate all work there; the two RPCs must live in `public` (PostgREST only calls exposed schemas) and reach `private` through `SECURITY DEFINER`. The Phase 2 live re-inspection verified that `private` has no client `USAGE` and that the exposed schemas are `public` and `graphql_public` only. That is not relied on alone: the table also has RLS on with no policy, and every privilege on it and on its identity sequence is revoked.
+
+**Deleting history needs no privileged function.** `authenticated` has `SELECT` and `DELETE` on `search_history` under own-row policies, which covers "remove one" and "clear all" (supabase-js needs a filter on a delete, e.g. `.not("query", "is", null)`). No INSERT/UPDATE grant or policy exists.
+
+### Normalization contract
+
+Canonical form = `private.normalize_search_query(raw)` or `NULL` (not recorded). Steps: reject raw input over 500 characters; NFKC; delete invisible and control characters (C0/C1 except whitespace controls, soft hyphen, Arabic letter mark, ZWSP, LRM/RLM, bidi controls, BOM); every whitespace run to one space, trimmed; `lower()`; 2 to 100 code points; at least one "useful" character. ZWNJ and ZWJ are **kept** (Persian, Indic scripts, emoji sequences).
+
+"Useful" is a blocklist (space, ASCII punctuation, Latin-1 symbols, combining marks, general punctuation, currency, arrows/maths/technical/dingbats, CJK punctuation, variation selectors, emoji, and invisible or meaningless code points: Hangul and Khmer fillers, other default-ignorable code points, private use, non-characters). It is not `[[:alnum:]]`, because that follows the database's ctype locale and can silently reject every non-ASCII title under a C locale. The gate is hygiene, not security (anyone can pass it with letters). Known limits, accepted: lone combining marks, script-specific punctuation and unassigned code points still pass.
+
+**How the database and the application agree:** they do not both implement it. The application sends the query it searched (`normalizeSearchQuery`: trimmed, at most 100 code points) and validates only type, scope and count range with Zod; the database alone canonicalizes. The display query is never lowercased in the app, because that would rewrite the search box while the user types.
+
+**How NFKC is implemented.** `normalize(text, NFKC)` is a core `pg_catalog` function (internal C `unicode_normalize_func`), available since PostgreSQL 13. It uses PostgreSQL's own Unicode decomposition tables, so it does **not** depend on ICU, libc, a collation, or an extension (LOCAL: the result is identical under `COLLATE "C"`). It requires a **UTF8 server encoding** and raises an error otherwise. The Unicode version is whatever the server release ships (LOCAL: 16.0 on PG 18.3), so it can trail or lead a browser's by a few characters; that only affects which very new characters fold. Not portable from PGlite by assumption: the live server's major version and encoding must be read (preflight below). `lower()` is different: it does follow the database locale (worse case folding under a C locale, never a rejection).
+
+### Access model
+
+| Object | anon | authenticated |
+| --- | --- | --- |
+| `private.search_events` and its sequence | nothing | nothing |
+| `public.search_history` | nothing | `SELECT`, `DELETE`, own rows (RLS) |
+| `public.record_search`, `public.trending_searches` | `EXECUTE` | `EXECUTE` |
+| `private.normalize_search_query`, `private.purge_search_events` | nothing | nothing |
+
+`PUBLIC` execute is revoked on all four functions. Supabase's default privileges grant access on new `public` objects to the API roles, so every object is revoked explicitly before the narrow grants.
+
+### `SECURITY DEFINER` functions (INSPECTED)
+
+Both have `set search_path = ''`, schema-qualified references, no dynamic SQL, and grants to exactly `anon` and `authenticated`. Supabase's advisors are expected to flag both as executable by `anon`/`authenticated`: intentional.
+
+- **`record_search`**: anonymous callers must append to a table they may not touch, and signed-in callers must write history without an INSERT/UPDATE grant (which would let them forge rows, timestamps and unbounded history). Identity comes only from `auth.uid()`; the caller supplies neither a user id, a timestamp nor the stored text; it returns nothing.
+- **`trending_searches`**: reads a table clients cannot read; returns `(query, count)` only; `p_limit` is clamped to 1..20 inside.
+
+### Behaviour of `record_search`
+
+Invalid scope or `result_count` (null, negative, above 10,000) raises `22023`. A query that normalizes to `NULL` is an ordinary input and is a silent no-op. Otherwise an event is appended. **Anonymous:** nothing else. **Signed in:** take the per-user lock, upsert `(user_id, scope, query)` with `searched_at = clock_timestamp()`, delete everything outside the newest 20.
+
+### Advisory lock and concurrency
+
+`pg_advisory_xact_lock(hashtextextended('velora.search_history:' || auth.uid(), 0))`, one key per user, transaction-scoped, the same pattern and a different key prefix from the watchlist cap. Transaction-scoped locks are safe behind Supabase's transaction pooler (a session-level lock would not be). The hash only has to agree between transactions on the same server at the same time, so it does not need to be stable across versions; a collision could only serialize two unrelated users. The function takes this one lock and no other, so lock ordering cannot invert. The direct `DELETE` policy takes only row locks and never the advisory lock, so it cannot form a cycle with it. One theoretical deadlock exists: a search in flight while that user's `auth.users` row is deleted (foreign-key locking); account deletion does not exist yet (Phase 7) and PostgreSQL resolves it by aborting one transaction. Without the lock, N racing searches at 20 rows would leave 20 + N − 1 until the next search. Real concurrency is **NOT TESTED** (PGlite is single-connection); it is in the live plan.
+
+### Retention (accurate wording)
+
+- Trending considers only the last 7 days.
+- Search history is bounded to 20 rows per authenticated user and is removed with the account.
+- **Anonymous analytics events currently have no automatically enforced physical expiration.**
+- `private.purge_search_events(p_older_than, p_batch)` provides bounded maintenance but is **not scheduled**. Its interval has no default, so the migration embeds no retention period.
+- Automatic physical analytics retention is **operational/technical debt** (see below).
+
+No document, comment or UI text may state a retention period unless automatic deletion is configured **and verified**.
+
+**Why the purge function is in this migration at all.** It is the only bounded way to delete events (a hand-written `DELETE` on a large table is the risk it removes), it is tested, and it lets an operator clean up after an abuse flood without waiting for a new migration. It selects by the `created_at` index, deletes at most one batch (default 5,000, capped at 50,000), orders oldest first, and cannot reach the 7-day trending window (the cutoff is floored at 7 days). No `PUBLIC`, `anon` or `authenticated` `EXECUTE` (LOCAL: checked). Recommendation: keep it. The smaller alternative, omitting it until retention is designed, saves about fifteen lines and removes nothing that is currently needed, but leaves the only cleanup path as ad-hoc SQL.
+
+### Trending, and what Checkpoint 4 must display
+
+Database: events from the last 7 days, canonical query, `result_count > 0`, at least 3 events, ordered by count, then most recent event, then text; limit clamped to 1..20 (default 6). `result_count > 0` only saves verification calls; it skips events and never subtracts any.
+
+**Checkpoint 4 display rules (replaces the current behaviour):**
+
+1. Ask `trending_searches` for more than six candidates.
+2. Verify each candidate against TMDB (`searchMedia`, the same URLs users click, so the hourly fetch cache is shared).
+3. Show up to six verified candidates; **show fewer than six when fewer qualify**.
+4. **Hide the section entirely when no verified Velora search qualifies.**
+5. **No fallback.** TMDB trending media titles are never presented as Velora "Trending searches". The existing `TrendingSearches` component in `app/search/page.tsx` (TMDB titles under a "Trending searches" heading, present since Phase 1) is deleted in Checkpoint 4, not kept as a cold-start substitute. Until then it is known-mislabelled behaviour, carried as debt.
+6. Cache the verified list for minutes rather than per page view.
+
+Consequence, accepted: with no data the empty `/search` page shows only the input and the "Browse by genre" link.
+
+### Abuse limits (documented, not solved)
+
+The publishable key is public, so anyone can call `record_search` outside Velora. Mitigations that exist: all inputs are validated in the database, `result_count` is bounded, queries are normalized, trending uses a bounded window and a minimum count, and candidates are verified against TMDB before display. Known limitations:
+
+- Scripted inflation is possible. "3 events" is not "3 people": there is no identifier by design.
+- **Storage growth.** Nothing limits how many anonymous events a script can append, and nothing deletes them until the purge is scheduled. At roughly 150 bytes per event with its indexes, a few million events is hundreds of megabytes. Recommended before launch, not in this migration: schedule the purge (pg_cron) and watch the table size; optionally add a global per-minute write budget inside `record_search`, which would let anyone suppress recording for everyone, so it is a product decision.
+- `trending_searches` is a public aggregate over the 7-day window; cost grows with volume. The API roles' `statement_timeout` is the backstop (read in the preflight), and a cached snapshot table is the later fix.
+- The RPC itself is public, so a direct caller sees unverified candidates. Honest clients report the real result count, and personal strings usually return zero results, so they are excluded; that is a privacy help, not a guarantee.
+- A still-valid token for a deleted user makes `record_search` fail with a foreign-key error and record nothing (LOCAL).
+
+Deliberately not added: IP logging, fingerprinting, Redis, CAPTCHA, service-role dependency.
+
+### Recording path for Checkpoint 3 (decision, not implemented)
+
+Client island → `POST` to a small Route Handler → `record_search` with the user's session. The island renders after a successful search, gets `query`, `scope` and the item count as props, and fires after about 1.5 s; navigating to the next query unmounts it and cancels the timer, which drops partial prefixes. It de-duplicates per `(scope, query)` per browser session. No TMDB request is made on this path. Rejected: Server Actions (dispatched one at a time per client, may re-render), `after()` in the render (fires for every debounced prefix and for bots, writes behind a GET), and the SDK in the browser (about 66 KB for every guest).
+
+This agrees with the Checkpoint 1 decision that recent searches use a client island and a Server Action gated on the session. Two items to test at Checkpoint 3 with real sessions: that a token refresh inside a Route Handler (cookies are writable there) does not race a concurrent Server Action refresh, and that the handler needs no `proxy.ts` change.
+
+### Evidence
+
+**LOCAL, 131 assertions, 0 failures** (PGlite, PostgreSQL 18.3 in WASM, `C.UTF-8`; scripts kept outside the repo). The stub reproduces the Supabase roles, `auth.uid()`, `auth.users` and the default grants to `anon`/`authenticated`; the three real migrations were applied in order. 108 cover normalization, grants (including a check shown to catch an unrevoked function), RLS isolation between two users, prune-to-20, trending and purge semantics and cascade on user deletion; 23 cover the invisible-character gate. A scan of **every** code point through the gate found no real letter or digit rejected (the only rejects are circled-digit symbols and the deliberately blocked fillers), and it is what led to blocking the invisible classes above.
+
+**Migration file encoding.** The first version of the file contained literal zero-width and bidi characters inside three regular expressions, because the authoring tool decoded `\uXXXX` escapes; reviewers could not see them. The regexes are regenerated as ASCII escapes; the only non-ASCII bytes left are three visible characters in comments.
+
+**Live status:** the structure, RLS, privileges and function security are VERIFIED live ("Applied and verified live"), and so is the behaviour under real sessions, data and concurrency ("Behavioural and adversarial verification (live)"). **Still NOT TESTED live:** index plans at real volume, and everything about the application wiring (Checkpoint 3).
+
+### Application plan (steps 1 to 3 and 7 done; see "Applied and verified live")
+
+Migration history is now reconciled for the two Phase 2 migrations (`313e621`). To keep it that way, apply this migration through the CLI (`supabase db push`), which records it, using the session-pooler URL if the machine is IPv4-only (`DIRECT_URL` resolves to IPv6 only). Applying it by other means (SQL editor, `psql`) needs a later `supabase migration repair`, which has not been authorized.
+
+Order: (1) run the read-only preflight (below); (2) apply in one transaction; (3) catalog checks (RLS flags, ACLs, `proconfig`, exposed schemas); (4) Data API with real sessions: anonymous `record_search` succeeds, `private` and other users' rows are unreachable, own-row delete works; (5) 20+ parallel `record_search` calls from one user at 19 and 20 rows leave at most 20; (6) `trending_searches` with seeded events, then remove every seeded row (needs an administrative connection); (7) advisors, expecting only the two intentional `SECURITY DEFINER` warnings; (8) regenerate `database.types.ts`.
+
+**Preflight (read-only, one transaction that is rolled back).** It reads the server version and encoding, evaluates the exact facilities the migration uses inline (NFKC, the `\u` and `\U` escapes inside classes, the blocklist, `lower()`), checks for name clashes and client `USAGE` on `private`, and reads role settings, default privileges and `pg_cron` availability. **Blockers if:** `server_version_num` < 130000, encoding is not UTF8, any of the first five probe columns is false, any name already exists, or a client role has `USAGE` on `private`. `lower_folds_non_ascii = false` is acceptable. The script was run locally inside a read-only transaction (LOCAL); it is in the Checkpoint 2 pre-apply report.
+
+### Types
+
+`lib/supabase/database.types.ts` is unchanged. It is hand-maintained; describing `search_history` and the RPC signatures before the migration exists would describe a schema that does not. It is updated in Checkpoint 3, after the migration is applied and verified.
+
+### Integration into `phase3-discover` (done)
+
+Done with `git stash push` limited to `docs/PHASE2_AUDIT.md`, `git switch -c phase3-discover --track origin/phase3-discover`, `git stash pop` (automatic merge) and this file copied back, with no merge, reset, rebase or cherry-pick. `HEAD` is `c5a9bbc` (equal to `origin/phase3-discover`); this file's diff against it is additions only. The migration and the audit changes are uncommitted. The uncommitted `docs/PHASE2_AUDIT.md` clarification (header debt, row 2) is legitimate and should be committed separately from the migration.
+
+### Phase 3 technical debt and release-gate tracking
+
+| # | Item | Status |
+| --- | --- | --- |
+| 1 | **Production build without Supabase variables fails at `/account`.** `assertAccountsAvailable` throws when `NODE_ENV=production` and Supabase is unset, and the page is otherwise prerendered. The keyless `npm run build` therefore fails, against the intent recorded in `next.config.ts` and the roadmap release gate (fresh clone: `npm ci` → lint → typecheck → build). Present since Phase 2; **not fixed here** | **Release-gate decision before Phase 3 close-out:** does the fresh-clone/guest-only gate require it? INSPECTED and reproduced |
+| 2 | Anonymous analytics events have no automatic physical expiration; the purge is unscheduled | Operational debt; needed before any retention statement (Phase 7.6) |
+| 3 | The current "Trending searches" block lists TMDB trending titles | Removed in Checkpoint 4 (see display rules) |
+| 4 | Storage growth from scripted event inserts | Documented above; mitigation is scheduling plus monitoring |
+| 5 | JavaScript-disabled rendering, stale client-side `robots`/canonical metadata after Discover filter changes, header layout at 768–960px | Accepted in Checkpoint 1 (items 1 to 3 above) and not addressed in Checkpoint 2 |
+| 6 | Search history is user-linked personal data | Must appear in the privacy documentation (Phase 7.6); it is removed on account deletion |
+| 7 | `private.purge_search_events(NULL, n)` resolves effectively to the 7-day floor. Private and unscheduled, so not a current production defect | Any future retention scheduler must pass an explicit, non-null retention interval; tightening needs a new forward migration (the applied migration is immutable) |
+
+### Static checks (Checkpoint 2, pre-apply)
+
+Run on the **combined** `phase3-discover` tree (Checkpoint 1 at `c5a9bbc` plus this checkpoint's files), with `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:1`, a placeholder key, and the service-role and database URLs blanked, so no live credential was used (fully blank Supabase variables fail at `/account`; see debt item 1): `npm run lint`, `npm run typecheck`, `npm run build` and `git diff --check` all pass. The route table includes `/discover`.
+
+Focused smoke check on a production server (`next start`, placeholder Supabase URL): `/discover` and four parameter variants (filtered TV, movie with year and rating, malformed parameters, page 2) return 200 with one `h1` and 20 titles; the default page has no `robots` tag and a canonical of `/discover`, filtered and paginated pages carry `noindex, follow` and a canonical to their own canonical URL, and malformed parameters fall back to the default canonical; the filter form (three selects, year input, Apply button) and the bottom-nav Discover link are present; `/search` and `/movies` still return 200. This is a regression smoke, not a repeat of the Checkpoint 1 browser audit.
+
+### Live read-only preflight (2026-09-20)
+
+Run through the Session Pooler with a Node runner: the reviewed `preflight.sql` verbatim, plus additional catalog queries, every one inside `BEGIN READ ONLY` … `ROLLBACK` (read-only asserted before each batch, and a keyword guard refused any statement containing DDL or write words). Nothing was created, changed or migrated. The normalization probes evaluated the three regular expressions read straight from the migration file as expressions, and were compared with the same expressions on PGlite. No credential, hostname or project identifier is recorded here.
+
+**TLS:** the connection was encrypted, but the Node runner **did not verify the pooler's certificate chain**: verification failed (the pooler's certificate authority is not in Node's trust store) and the runner fell back to an unverified encrypted connection. The data read was non-secret catalog data, but the credential travelled over a channel whose server identity was not verified. Not a defect in the migration; a limitation of this runner (the CLI verifies TLS its own way).
+
+| Item | VERIFIED live | LOCAL (PGlite) |
+| --- | --- | --- |
+| PostgreSQL | **17.6** (`server_version_num` 170006) | 18.3 |
+| Server encoding | **UTF8** | UTF8 |
+| Collation / ctype | **`en_US.UTF-8` / `en_US.UTF-8`**, default collation provider ICU (`en-US`) | `C.UTF-8` |
+| `standard_conforming_strings` | **on** | on |
+| Unicode tables (`unicode_version()`) | **15.1** | 16.0 |
+
+**Feature probes, VERIFIED live (all true):** `normalize(…, NFKC)` folds compatibility forms; the `IS NFKC NORMALIZED` predicate works; unicode escapes (four digits) work inside bracket classes; astral escapes (eight digits) work inside bracket classes; non-Latin text survives the blocklist. `hashtextextended`, `pg_advisory_xact_lock(bigint)`, `normalize(text, text)` and `auth.uid()` exist.
+
+**Lowercase probe: `false`, harmless, and a defect in the probe, not the database.** VERIFIED live at the byte level: É lowercases to `c3a9` (é) and Cyrillic folds correctly. A capital sigma at the end of a word lowercases to the **final sigma** (`cf82`, ς), because the ICU default collation applies the context-sensitive rule; the probe expected the plain σ (`cf83`), which PGlite's builtin locale produces. Dotted capital I lowercases to `i` plus a combining dot (`69cc87`). Consequence: none for acceptance or de-duplication. Only the database canonicalizes, so a Greek word ending in Σ is stored with ς consistently; the application must never compute or compare canonical forms itself (already the design).
+
+**Multilingual probe table, VERIFIED live: 31 probes, 0 unexpected results.** Accepted with the expected canonical form: full-width Latin, ligature, NBSP and ideographic whitespace, Japanese, Korean, Cyrillic, Devanagari, Arabic, Persian (ZWNJ kept), astral CJK, an emoji flag with text, control characters and a bidi override removed, digits, circled digits, exactly 100 characters. Rejected: emoji-only, `!!`, `...`, dash/ellipsis, ZWSP-only, Hangul-filler-only, word-joiner-plus-BOM-only, private-use-only, one character, empty, whitespace-only, 101 characters, 501 characters. **Identical to PGlite on 30 of 31**; the only difference is the Greek final sigma above.
+
+**Differences between live and PGlite that could matter:** PostgreSQL 17.6 versus 18.3; Unicode 15.1 versus 16.0 (affects only characters added in Unicode 16); ICU default collation versus builtin `C.UTF-8` (context-sensitive lowercase). None changed any acceptance decision.
+
+**Collisions and exposure, VERIFIED live:** none of `private.search_events`, `public.search_history`, `record_search`, `trending_searches`, `normalize_search_query`, `purge_search_events`, the identity sequence or the index exists in any schema (functions and relations checked across all schemas). Schema `private` exists (owner `postgres`, ACL owner-only); `anon`, `authenticated` and `service_role` have no `USAGE` on it. The list of schemas exposed by the Data API is **not readable from the catalog** (no `pgrst.db_schemas` role setting), so it was not re-confirmed here (Phase 2 verified it through the API); the missing `USAGE` on `private` denies access even if it were exposed.
+
+**Default privileges, VERIFIED live:** objects created in `private` by `postgres` or `supabase_admin` receive **no** default ACL entries (PostgreSQL's built-in `PUBLIC` execute on new functions applies and is revoked by the migration). Objects created in `public` receive full table, sequence and function privileges for `anon`, `authenticated` and `service_role` by default, which is exactly what the migration's explicit `revoke all … from public, anon, authenticated` (followed by narrow grants) undoes. `service_role` keeps its defaults and bypasses RLS; not a client defect. `postgres` is not a superuser but has `BYPASSRLS`, so its `SECURITY DEFINER` functions bypass RLS as designed.
+
+**Migration history, VERIFIED live:** `supabase_migrations.schema_migrations` holds `20260919000000` (`profiles_and_watchlist`) and `20260920000000` (`watchlist_limit_lock`); the latest recorded is `20260920000000`, so `20260920181819` applies next. **`pg_cron`:** available (1.6.4), not installed (informational; not enabled). Installed extensions: `pg_stat_statements`, `pgcrypto`, `plpgsql`, `supabase_vault`, `uuid-ossp`.
+
+**Phase 2 security objects, VERIFIED live, present:** `profiles` (RLS on, 2 policies) and `watchlist_items` (RLS on, 3 policies); `anon` has nothing; `authenticated` has `SELECT` on `profiles` and `SELECT`, `INSERT`, `DELETE` on `watchlist_items`; the three triggers are enabled; `handle_new_user` is `SECURITY DEFINER` with an empty `search_path` and an ACL of `postgres` only; `set_updated_at` and `enforce_watchlist_limit` have an empty `search_path`, are not `SECURITY DEFINER`, and carry the default `PUBLIC` execute (unreachable without `USAGE` on `private`; already noted in Phase 2). `auth.uid()` reads only the JWT claims (`request.jwt.claim.sub` or `request.jwt.claims`).
+
+**Timeouts, VERIFIED live:** `statement_timeout` is 3 s for `anon` and 8 s for `authenticated`, which resolves the earlier "to be confirmed" backstop for the public trending aggregate. `authenticator` also carries `lock_timeout=8s`, which bounds a wait on the per-user advisory lock (its critical section is two short statements). The `safeupdate` extension is preloaded, which is why a history `DELETE` needs a filter.
+
+**Every required preflight condition passed** (version 13 or later, UTF8, all probes, no name clashes, `private` present with no client `USAGE`, Phase 2 objects intact). **NOT TESTED at this point:** everything about the Phase 3 objects, which did not exist yet.
+
+### Applied and verified live (2026-09-20/21)
+
+**Mechanism.** Supabase CLI 2.117.0, installed in a scratch directory (not a project dependency), `supabase db push --skip-vault --db-url <Session Pooler string from the local environment, never printed>`. A `--dry-run` first listed exactly one migration (`20260920181819_search_analytics_and_history.sql`, no seeds, no roles); the real push then applied exactly that one and exited 0. The file's SHA-256 was re-checked immediately before the push. Not used: `DIRECT_URL`, the service-role key, `migration repair`, ad-hoc SQL, any other migration. The push ran in the CLI's own connection; the verification runner below is a separate Node client that connected encrypted but **did not verify the pooler's certificate chain** (as in the preflight).
+
+**Verification: 56 read-only checks, 0 failed** (every statement inside `BEGIN READ ONLY` ... `ROLLBACK`, guarded against write keywords; the connection was slow that evening, which is why the runner needs long timeouts). VERIFIED live, from the catalog and not inferred from the file:
+
+- **History:** `schema_migrations` holds `20260919000000`, `20260920000000` and `20260920181819` (`search_analytics_and_history`, 22 statements); the latest applied is the new one. The recorded statements contain the reviewed bodies of all four functions.
+- **Objects (exactly the expected set):** `private.search_events` (owner `postgres`), its identity sequence `search_events_id_seq`, `search_events_pkey`, `search_events_created_at_idx` (btree on `created_at`), `public.search_history` with `search_history_pkey (user_id, scope, query)` and a foreign key to `auth.users` `ON DELETE CASCADE`, and four functions. Functions in `public` and `private` are exactly the three Phase 2 ones plus the four new ones, all owned by `postgres`. Nothing else named `search_*` exists in any schema. Columns, types, nullability, defaults and the `GENERATED ALWAYS` identity match the migration; `search_events` has no identity-revealing column; the table `CHECK` constraints are present; there are no triggers on the new tables.
+- **RLS:** enabled (not forced) on both tables. `search_events` has **no** policies. `search_history` has exactly two, both permissive and `TO authenticated`: "read own" (SELECT) and "remove own" (DELETE), each `(SELECT auth.uid()) = user_id`. No INSERT, UPDATE or ALL policy.
+- **Privileges:** `anon` and `PUBLIC` have nothing on either table; `authenticated` has exactly `SELECT` and `DELETE` on `search_history` and nothing on `search_events`; no client privilege of any kind on `search_events_id_seq`; no column-level grants; `anon` and `authenticated` still have no `USAGE` on `private`. `service_role` holds Supabase's default full table privileges on `search_history` (and bypasses RLS): not a client defect, and its key is never used by the app.
+- **Functions:** `normalize_search_query` (not `SECURITY DEFINER`, empty `search_path`, IMMUTABLE STRICT PARALLEL SAFE) and `purge_search_events(p_older_than interval, p_batch integer DEFAULT 5000)` (not `SECURITY DEFINER`, empty `search_path`, **no default retention interval**) have `EXECUTE` for `postgres` only. `record_search(p_query text, p_scope text, p_result_count integer) returns void` and `trending_searches(p_limit integer DEFAULT 6) returns TABLE(query text, search_count bigint)` (STABLE) are `SECURITY DEFINER` with an empty `search_path`, and `EXECUTE` goes to `anon`, `authenticated`, `postgres` and `service_role`, **never `PUBLIC`**. The live `prosrc` of all four is **byte-identical** to the reviewed migration bodies.
+- **Normalization through the installed function:** 36 probes (the 31 from the preflight plus mixed whitespace runs, a 500-character raw input that collapses to a two-letter query, and 501 and 600 raw characters, which the raw guard rejects) all produce the expected result, are identical to the pre-apply expression results on the live server, and differ from PGlite only on the Greek final sigma. A 100-character query is accepted; 101 is rejected.
+- **Read-only role probes** (`SET LOCAL ROLE` inside a read-only transaction; nothing written): `anon` and `authenticated` can call `trending_searches` (the argument is clamped: 1,000,000 returns at most 20 rows; the table is empty, so the result is not behavioural verification); both are denied (`42501`) on `private.search_events`, `private.normalize_search_query` and `private.purge_search_events`; `anon` is denied on `search_history`; `authenticated` with no JWT subject can read it and RLS returns 0 rows.
+
+**Advisors** (`supabase db advisors --type security --level info`, read-only): one finding, **new and intentional**: `rls_enabled_no_policy` (INFO) on `private.search_events`, which is exactly the intended deny-all-by-default posture (RLS on, no policy, no client privileges). No finding on any Phase 2 object and none on `record_search` or `trending_searches` (I had expected the "SECURITY DEFINER function executable by anon/authenticated" warnings; this CLI's security advisor did not raise them). Performance advisors were not run. No production object was patched.
+
+**Static gates on the post-apply tree** (`phase3-discover` at `c5a9bbc` plus this checkpoint's files; placeholder Supabase URL, no live credential): `npm run lint`, `npm run typecheck`, `npm run build` and `git diff --check` pass.
+
+**Behaviour** (`record_search`, history, trending, concurrency, the purge) is recorded in the next section.
+
+### Behavioural and adversarial verification (live, 2026-09-21)
+
+**Result: 0 database defects found. Every behavioural check passed live; all test data was removed and the baselines were restored.**
+
+**Method.** A Node harness kept outside the repository (it uses `pg` from a scratch directory and the project's own `@supabase/supabase-js`; no dependency was added). Two disposable users were created through the Auth admin API with synthetic addresses (`velora-cp2-test-<run tag>-a` and `-b`) and random in-memory passwords; their redacted ids end in `...5fbe02` and `...bfc1df`. The service-role key was used **only** to create and delete those two users. Every RPC and Data API call used the publishable key and each user's own session token, which is the path the application will use. An owner-level connection (Session Pooler) was used only to read hidden state, to seed controlled analytics rows for the aggregate test, and to clean up. Every test query carried a per-run tag so all test rows were identifiable. The one pre-existing real account was never read or modified. No credential, token, URL or hostname was printed or written to disk (the harness redacts every output; a scan of all output files found none).
+
+**Baseline.** Branch `phase3-discover`, HEAD `c5a9bbc`, applied migration unchanged (SHA-256 `637c7855...ae2c`); `private.search_events` 0 rows; 1 real account, 1 profile, 2 watchlist rows, 0 history rows. Migration history: three versions, latest `20260920181819`.
+
+**Identities (VERIFIED live).** Both users obtained independent authenticated sessions: `role` `authenticated`, not anonymous, no `service_role` claim, token subject equal to the user's own id, and the Auth server confirmed each identity. The Phase 2 trigger created a profile for each.
+
+**Guest `record_search` (VERIFIED live).** HTTP 204; exactly one event appended; no history row created; the event holds only `id`, `query`, `scope`, `result_count`, `created_at`, with the canonical query, the scope and the bounded count as sent and `created_at` inside the database-clock window of the call; the table has no user, session, IP, user-agent, token or fingerprint column. **Normalization through the RPC**, stored value read back: full-width Latin, ligature, tabs/NBSP/ideographic space/newline with mixed case, Japanese, Korean, Cyrillic (lowercased), Devanagari, Arabic, Persian (ZWNJ kept), a zero-width space and a control character inside a word (removed), a bidi override (removed), circled digits (folded), an emoji flag sequence with text (kept), and accented Latin (case-folded) all stored exactly as the contract says; a Greek word ends in the final sigma (informational). Scope and count preserved.
+
+**Invalid input (VERIFIED live), with event and history counts checked around every call, no partial write in any case.** Raise `22023`: invalid scope, `ALL` (case-sensitive), NULL and empty scope, count -1, 10001, 2147483647 and NULL. Non-integer counts (`1.5`, `'abc'`) fail earlier with `22P02` (the type cast), a NUL character with `22P05`, a lone surrogate is rejected by PostgREST before it reaches the database (`PGRST102`), and a missing argument or a caller-supplied `p_user_id` or `p_searched_at` does not match any signature (`PGRST202`). Silent no-ops (no error, nothing written): NULL query, `!!`, `...`, one character, one full-width character, empty, whitespace-only, emoji-only, ZWSP-only, Hangul-filler-only, word-joiner-plus-BOM-only, private-use-only, 501 and 5,000 raw characters, a 608-character raw input, and a canonical form of 101 characters. Accepted: a canonical form of exactly 100 characters, and counts 0 and 10000.
+
+**Authenticated recording, user A (VERIFIED live).** One event and one history row; the query is canonicalized by the database and the scope kept; `searched_at` is database-generated (inside the database-clock window); A reads the same row through the Data API. Forging is impossible: `p_user_id` and a timestamp do not exist as parameters (`PGRST202`) and nothing was written. Repeating the same `(scope, query)` adds an analytics event, keeps one history row and advances `searched_at`; the same query under `movie` and `tv` creates distinct rows; case and whitespace variants collapse onto the same key. Authenticated invalid calls raise `22023` or no-op and write nothing.
+
+**Two-user isolation (VERIFIED live, Data API with real sessions).** A sees only A's rows and B only B's (also when filtering for the other's id). Cross-deletes affect 0 rows in both directions. When B deletes a key it shares with A, only B's own row goes. Each user can delete its own row. Direct `INSERT` (own and spoofed owner), `UPDATE` and `UPSERT` on `search_history` are denied with `42501`, leaving data unchanged; a guest is denied `SELECT` and `DELETE`. **`private` through PostgREST:** `schema('private')` reads by a user and by a guest are refused (`PGRST106`, HTTP 406, no data); `search_events` does not exist in `public` (`PGRST205`); the internal functions do not exist in the public API (`PGRST202`) and are refused in the `private` profile (`PGRST106`). The analytics table was untouched by all of it.
+
+**Exact 20-row bound (VERIFIED live).** After 25 sequential distinct recordings across all three scopes the history holds exactly the newest 20 in recency order, the oldest 5 pruned, and analytics kept one event per recording. Re-searching the oldest kept entry keeps 20 rows and makes it newest; re-searching a pruned entry re-adds it as newest and prunes the then-oldest; refreshing the newest advances its timestamp.
+
+**Concurrency and the advisory lock (VERIFIED live; a required acceptance gate).** Bursts issued together from separate concurrent HTTP requests (peak in flight equal to the burst size), against a history already at 20 rows: **24** distinct queries; **30** requests as 15 queries each issued twice concurrently; **44** requests as 22 for each of two users at once; and 6 more during the lock test. In every burst: 0 errors (no deadlock `40P01`, no lock timeout `55P03`, no statement timeout `57014`, no unique violation even for concurrent duplicates), the history was **exactly 20 rows**, no duplicate key, all timestamps distinct, and the analytics table counted every successful call; after burst 1 all 20 retained rows came from the burst, and the two users never affected each other. **Lock-hold proof:** with an owner connection holding A's advisory lock, 6 concurrent `record_search` calls for A were blocked (the server showed 6 waiters on an advisory lock in both `pg_locks` and `pg_stat_activity`; none returned, and their events were not visible), while B's call, on a different key, finished in about 300 ms. After release all 6 succeeded (each had waited about 2.7 s) and A held exactly 20 rows. **Honest limits:** in the unheld bursts the server-side overlap cannot be observed independently (requests take 0.3 to 1 s each end to end), so the deterministic lock-hold test is what proves the mechanism and the bursts show the invariants hold under load. A no-lock control was not run: it would need a modified function, and the applied migration is immutable.
+
+**Trending, from seeded controlled events (VERIFIED live).** Guest and signed-in callers get identical, deterministic results, and the output has exactly the columns `query` and `search_count`. Verified: count-then-recency-then-text ordering including a tie-break; the minimum of 3 events (exactly 3 qualifies, 2 does not); `result_count > 0` (all-zero and mostly-zero queries excluded); the 7-day window with boundary probes on both sides (3 events just inside are counted, 3 just outside are not; 6 events 8 days old and 2-of-6 in-window excluded); a candidate recorded through the real public RPC qualifies. Limits: the default is 6 (argument omitted or NULL), 0 and negative values give 1 row, and with 23 candidates `p_limit` of 21, 1,000,000 and 2147483647 all return exactly 20, the true top 20.
+
+**Purge (VERIFIED live; my addition, run entirely inside a transaction that was rolled back).** Batch bound (batch 5 deletes exactly 5), oldest-first ordering, batch 0 and negative clamped to 1, an oversized batch clamped without error, and the 7-day floor (a cutoff of `'0 seconds'` deletes only rows older than 7 days and never recent ones). Afterwards no purge-test row existed and the table was exactly as before.
+
+**Cleanup (VERIFIED live).** Both users were deleted through the Auth admin API, their profiles, history rows, sessions and identities were gone (cascade), and neither could sign in again. The tagged analytics rows were deleted; an independent recheck showed `private.search_events` 0 rows, `auth.users` 1, `profiles` 1, `watchlist_items` 2, `search_history` 0, migration history unchanged, and the disposable-credential state file deleted.
+
+**Findings.** No database defect. Notes for the record:
+
+1. `private.purge_search_events(NULL, n)` currently resolves effectively to the 7-day floor (`greatest` ignores NULL), so a scheduler that passed NULL would delete everything older than 7 days. The function is private (no client `EXECUTE`) and unscheduled, so this is **not a current production defect**. Any future retention scheduler must pass an explicit, non-null retention interval. Tightening this behaviour later requires a new forward migration; the applied migration is not edited.
+2. Input-type errors surface as `22P02` (non-integer counts) or `22P05` (NUL) rather than the function's own `22023`; nothing is written either way.
+3. The first run of the concurrency phase reported ten failures. They were my harness's mistake (test names written with capital letters while the database correctly lowercases the canonical query, so exact-match and `LIKE` counts were 0). I confirmed that from the actual rows (the analytics counts were exactly 24, 30, 44 and 6, and both histories were exactly 20) before fixing the harness and rerunning the phase in full: 35 of 35 passed.
+
+**Not covered by this verification.** The client island, the Route Handler and token refresh inside a Route Handler (Checkpoint 3); the behaviour of a still-valid token belonging to a deleted user (the foreign-key failure is local-only evidence); index plans, performance and storage growth at real volume; PostgREST pool exhaustion under much larger bursts; sustained-load timeouts; the unverified certificate chain of the Node runner's TLS connection; regeneration of `database.types.ts`.
