@@ -1,4 +1,5 @@
-import type { CastMember, Media, MediaDetail, MediaType } from "@/types/media";
+import type { CastMember, DiscoverFilters, Media, MediaDetail, MediaType } from "@/types/media";
+import { genreNames } from "./genres";
 
 /**
  * Small built-in catalogue used when no TMDB credentials are configured, so the
@@ -205,6 +206,20 @@ export function sampleMedia({ mediaType, search }: SampleQuery = {}) {
       (!mediaType || item.mediaType === mediaType) &&
       (!term || item.title.toLowerCase().includes(term)),
   );
+}
+
+/** /discover over the sample catalogue. Genres are matched by name, since the samples carry names only. */
+export function sampleDiscover({ type, genre, year, rating, sort }: Omit<DiscoverFilters, "page">) {
+  const [genreName] = genreNames(genre ? [genre] : []);
+  const matches = sampleMedia({ mediaType: type }).filter(
+    (item) =>
+      (!genre || (genreName !== undefined && item.genres.includes(genreName))) &&
+      (!year || item.releaseYear === year) &&
+      (!rating || (item.rating ?? 0) >= rating),
+  );
+  if (sort === "rating") return matches.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+  if (sort === "newest") return matches.sort((a, b) => (b.releaseYear ?? 0) - (a.releaseYear ?? 0));
+  return matches;
 }
 
 export function sampleDetail(mediaType: MediaType, id: number): MediaDetail | null {

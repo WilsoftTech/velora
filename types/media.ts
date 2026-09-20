@@ -45,3 +45,17 @@ export interface MediaPage {
 
 export type BrowseList = "popular" | "top_rated";
 export type SearchScope = "all" | MediaType;
+
+export type DiscoverSort = "popular" | "rating" | "newest";
+
+/** A validated /discover query. `genre`, `year` and `rating` are null when that filter is off. */
+export interface DiscoverFilters {
+  type: MediaType;
+  /** A TMDB genre id that is valid for `type`. */
+  genre: number | null;
+  year: number | null;
+  /** Minimum TMDB average (whole number). */
+  rating: number | null;
+  sort: DiscoverSort;
+  page: number;
+}

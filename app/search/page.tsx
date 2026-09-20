@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
-import { SearchX, TriangleAlert, TrendingUp } from "lucide-react";
+import { SearchX, SlidersHorizontal, TriangleAlert, TrendingUp } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { MovieList, MovieListItem } from "@/components/movie-list-item";
 import { RetryButton } from "@/components/retry-button";
 import { SearchInput } from "@/components/search-input";
 import { ListSkeleton } from "@/components/skeletons";
 import { TabLinks } from "@/components/tab-links";
+import { discoverHref } from "@/lib/discover";
 import { getTrending, searchMedia } from "@/lib/tmdb/media";
 import { firstParam, normalizeSearchQuery, parseSearchScope } from "@/lib/utils";
 import type { SearchScope } from "@/types/media";
@@ -120,9 +121,18 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
             </div>
           </>
         ) : (
-          <Suspense>
-            <TrendingSearches />
-          </Suspense>
+          <>
+            <Link
+              href={discoverHref()}
+              className="mb-2 inline-flex min-h-11 items-center gap-2 text-label-lg text-highlight transition-colors hover:text-foreground"
+            >
+              <SlidersHorizontal aria-hidden className="size-4" />
+              Browse by genre
+            </Link>
+            <Suspense>
+              <TrendingSearches />
+            </Suspense>
+          </>
         )}
       </div>
     </div>

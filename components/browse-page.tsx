@@ -1,14 +1,16 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Film } from "lucide-react";
+import { Film, SlidersHorizontal } from "lucide-react";
 import { buttonClass } from "@/components/button";
 import { EmptyState } from "@/components/empty-state";
 import { MovieGrid } from "@/components/movie-grid";
+import { Pagination } from "@/components/pagination";
 import { GridSkeleton } from "@/components/skeletons";
 import { TabLinks } from "@/components/tab-links";
+import { discoverHref } from "@/lib/discover";
 import { getMovies, getShows, getTrending } from "@/lib/tmdb/media";
 import { parseBrowseList, parsePage } from "@/lib/utils";
-import type { BrowseList, MediaPage } from "@/types/media";
+import type { BrowseList, MediaPage, MediaType } from "@/types/media";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -17,18 +19,21 @@ const BROWSE = {
     title: "Movies",
     path: "/movies",
     hasLists: true,
+    discoverType: "movie" as MediaType | undefined,
     load: (list: BrowseList, page: number) => getMovies(list, page),
   },
   tv: {
     title: "TV Shows",
     path: "/tv",
     hasLists: true,
+    discoverType: "tv" as MediaType | undefined,
     load: (list: BrowseList, page: number) => getShows(list, page),
   },
   trending: {
     title: "Trending",
     path: "/trending",
     hasLists: false,
+    discoverType: undefined as MediaType | undefined,
     load: (_list: BrowseList, page: number) => getTrending(page),
   },
 };
@@ -65,27 +70,7 @@ async function BrowseResults({ kind, list, page }: { kind: BrowseKind; list: Bro
   return (
     <>
       <MovieGrid items={data.items} />
-      {data.totalPages > 1 && (
-        <nav aria-label="Pagination" className="mt-10 flex items-center justify-center gap-4">
-          {page > 1 ? (
-            <Link href={browseHref(path, list, page - 1)} className={buttonClass("secondary")}>
-              Previous
-            </Link>
-          ) : (
-            <span className="min-w-24" />
-          )}
-          <span className="text-body-md text-muted">
-            Page {data.page} of {data.totalPages}
-          </span>
-          {page < data.totalPages ? (
-            <Link href={browseHref(path, list, page + 1)} className={buttonClass("secondary")}>
-              Next
-            </Link>
-          ) : (
-            <span className="min-w-24" />
-          )}
-        </nav>
-      )}
+      <Pagination page={data.page} totalPages={data.totalPages} hrefFor={(target) => browseHref(path, list, target)} />
     </>
   );
 }
@@ -93,13 +78,24 @@ async function BrowseResults({ kind, list, page }: { kind: BrowseKind; list: Bro
 /** Shared body of /movies, /tv and /trending: a titled poster grid with paging. */
 export async function BrowsePage({ kind, searchParams }: { kind: BrowseKind; searchParams: SearchParams }) {
   const params = await searchParams;
-  const { title, path, hasLists } = BROWSE[kind];
+  const { title, path, hasLists, discoverType } = BROWSE[kind];
   const list = hasLists ? parseBrowseList(params.list) : "popular";
   const page = parsePage(params.page);
 
   return (
     <div className="page-container py-6 sm:py-8">
-      <h1 className="text-headline-md md:text-headline-lg">{title}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-x-4">
+        <h1 className="text-headline-md md:text-headline-lg">{title}</h1>
+        {discoverType && (
+          <Link
+            href={discoverHref({ type: discoverType })}
+            className="inline-flex min-h-11 items-center gap-2 text-label-lg text-highlight transition-colors hover:text-foreground"
+          >
+            <SlidersHorizontal aria-hidden className="size-4" />
+            Filter by genre
+          </Link>
+        )}
+      </div>
       {hasLists && (
         <div className="mt-4 max-w-xs">
           <TabLinks

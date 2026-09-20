@@ -1,6 +1,7 @@
 import type {
   BrowseList,
   CastMember,
+  DiscoverFilters,
   Media,
   MediaDetail,
   MediaPage,
@@ -11,7 +12,7 @@ import type {
 } from "@/types/media";
 import { isTmdbConfigured, tmdbFetch, tmdbFetchPage } from "./client";
 import { genreNames, shortGenreName } from "./genres";
-import { sampleDetail, sampleMedia } from "./sample";
+import { sampleDetail, sampleDiscover, sampleMedia } from "./sample";
 import { normalizeSearchQuery, toSummary } from "@/lib/utils";
 import type { TmdbDetail, TmdbPaged, TmdbResult } from "./types";
 
@@ -79,6 +80,50 @@ export async function getMovies(list: BrowseList, page = 1): Promise<MediaPage> 
 export async function getShows(list: BrowseList, page = 1): Promise<MediaPage> {
   if (usingSampleData()) return samplePage(sampleMedia({ mediaType: "tv" }), page);
   return toMediaPage(await tmdbFetchPage<TmdbResult>(`/tv/${list}`, { page }), "tv");
+}
+
+// Every parameter below is built from a validated DiscoverFilters (lib/discover.ts),
+// never from raw URL input, so nothing arbitrary reaches TMDB.
+const DISCOVER_YEAR_PARAM = { movie: "primary_release_year", tv: "first_air_date_year" } as const;
+const DISCOVER_DATE_FIELD = { movie: "primary_release_date", tv: "first_air_date" } as const;
+
+// A lone 10/10 vote would otherwise win "top rated", and "newest" would be all
+// zero-vote placeholders released today. Floors chosen against live TMDB results;
+// TV titles collect far fewer votes than films.
+const MIN_VOTES = {
+  ratingFilter: 50,
+  ratingSort: { movie: 300, tv: 100 },
+  newest: { movie: 10, tv: 5 },
+} as const;
+
+export async function discoverMedia({ type, genre, year, rating, sort, page }: DiscoverFilters): Promise<MediaPage> {
+  if (usingSampleData()) return samplePage(sampleDiscover({ type, genre, year, rating, sort }), page);
+
+  const dateField = DISCOVER_DATE_FIELD[type];
+  const params: Record<string, string | number> = { page, include_adult: "false" };
+  let minVotes = 0;
+
+  if (sort === "rating") {
+    params.sort_by = "vote_average.desc";
+    minVotes = MIN_VOTES.ratingSort[type];
+  } else if (sort === "newest") {
+    params.sort_by = `${dateField}.desc`;
+    // Unreleased titles can carry a placeholder date; never rank them as new.
+    params[`${dateField}.lte`] = new Date().toISOString().slice(0, 10);
+    minVotes = MIN_VOTES.newest[type];
+  } else {
+    params.sort_by = "popularity.desc";
+  }
+
+  if (rating) {
+    params["vote_average.gte"] = rating;
+    minVotes = Math.max(minVotes, MIN_VOTES.ratingFilter);
+  }
+  if (minVotes) params["vote_count.gte"] = minVotes;
+  if (genre) params.with_genres = genre;
+  if (year) params[DISCOVER_YEAR_PARAM[type]] = year;
+
+  return toMediaPage(await tmdbFetchPage<TmdbResult>(`/discover/${type}`, params), type);
 }
 
 export async function searchMedia(rawQuery: string, scope: SearchScope = "all"): Promise<MediaPage> {
