@@ -139,7 +139,7 @@ Each user: reads only their own profile and watchlist; updating another user's p
 | # | Finding | Fix (files) |
 | --- | --- | --- |
 | 1 | **500-title cap race**: two concurrent inserts at 499 both succeeded (501 rows) | New migration with a per-user advisory lock (`supabase/migrations/20260920000000_watchlist_limit_lock.sql`) |
-| 2 | **Header overflow, 124px at 768px and 92px at 800px, every page**: the full "Sign in / Create account" pair appeared at `md`. At 1024px it wrapped and squeezed the logo to 29px | Compact account icon until `xl`; header search stays narrower until `xl` (`components/account-link.tsx`, `components/header-search.tsx`). Logo is full-size and labels no longer wrap from 1024px up |
+| 2 | **Header overflow, 124px at 768px and 92px at 800px, every page**: the full "Sign in / Create account" pair appeared at `md`. At 1024px it wrapped and squeezed the logo to 29px | Compact account icon until `xl`; header search stays narrower until `xl` (`components/account-link.tsx`, `components/header-search.tsx`). Logo is full-size and labels no longer wrap from 1024px up. **Only partly resolved:** the overflow is gone at 768px, but the logo is still squeezed to 7px there and two nav labels wrap up to 960px (Known limitation 2) |
 | 3 | **Stale alert**: clicking "Add to My List" before the list loaded showed "Still loading your list" and it stayed on screen after the list arrived | `publish()` clears a "loading" error once items arrive (`lib/watchlist.ts`) |
 
 ## Known limitations and technical debt
