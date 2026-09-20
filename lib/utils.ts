@@ -80,8 +80,22 @@ export function safeRedirectPath(value: string | null | undefined, fallback = "/
   return new URL(value, "http://velora.invalid").origin === "http://velora.invalid" ? value : fallback;
 }
 
+/** The one place a search URL is built, so results, tabs and history links always agree. */
+export function searchHref(query: string, scope: SearchScope = "all") {
+  return `/search?q=${encodeURIComponent(query)}${scope === "all" ? "" : `&type=${scope}`}`;
+}
+
+export const SEARCH_SCOPE_LABELS: Record<SearchScope, string> = { all: "All", movie: "Movies", tv: "TV Shows" };
+
 /** Longest search query that is forwarded to TMDB. */
 export const MAX_SEARCH_LENGTH = 100;
+
+/**
+ * Ceiling of the result count public.record_search accepts (TMDB itself stops at
+ * 500 pages x 20). Lives here, not in lib/schemas.ts, so the client recording
+ * island can clamp without pulling Zod into the guest bundle.
+ */
+export const MAX_SEARCH_RESULT_COUNT = 10_000;
 
 /**
  * Trims and caps a search query. Counts code points rather than UTF-16 units so

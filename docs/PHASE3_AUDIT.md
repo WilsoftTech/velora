@@ -379,3 +379,162 @@ Run through the Session Pooler with a Node runner: the reviewed `preflight.sql` 
 3. The first run of the concurrency phase reported ten failures. They were my harness's mistake (test names written with capital letters while the database correctly lowercases the canonical query, so exact-match and `LIKE` counts were 0). I confirmed that from the actual rows (the analytics counts were exactly 24, 30, 44 and 6, and both histories were exactly 20) before fixing the harness and rerunning the phase in full: 35 of 35 passed.
 
 **Not covered by this verification.** The client island, the Route Handler and token refresh inside a Route Handler (Checkpoint 3); the behaviour of a still-valid token belonging to a deleted user (the foreign-key failure is local-only evidence); index plans, performance and storage growth at real volume; PostgREST pool exhaustion under much larger bursts; sustained-load timeouts; the unverified certificate chain of the Node runner's TLS connection; regeneration of `database.types.ts`.
+
+---
+
+## Checkpoint 3 — Application integration: search recording and recent-search history
+
+**Status: implemented and verified against the live project; uncommitted.** No database change, no migration, no new dependency. `private`, RLS and grants were not touched. The service-role key was used only inside an out-of-repo test harness to create and delete four disposable users; the application server was always started with the service-role key and both database URLs blanked, and a scan of the production build found none of them (see Security).
+
+Legend as above. **LOCAL** was not used in this checkpoint: everything ran against the live project and a production build. Method: `next build` + `next start`, real Edge via `playwright-core`, axe-core; the harness lives outside the repo (as in Phase 2 and Checkpoint 2). Disposable users had synthetic addresses, signed in through the real sign-in form or through `@supabase/ssr` exactly as the app's server client does, and were deleted afterwards. Every test query carried a per-run tag or was removed by name. The live database was snapshotted before and after: **identical** (0 events, 0 history rows, 1 real account, 1 profile, 2 watchlist rows, the same three migrations). The identity sequence of `private.search_events` advanced (harmless).
+
+### Files
+
+New: `app/api/search-events/route.ts`, `components/search-recorder.tsx`, `components/recent-searches.tsx`, `lib/search-history-actions.ts`.
+Changed: `app/search/page.tsx`, `lib/schemas.ts`, `lib/utils.ts`, `types/media.ts`, `lib/supabase/database.types.ts`. Nothing else.
+
+### Architecture
+
+```text
+/search (Server Component: still session-free, still one TMDB call)
+ |- SearchResults --TMDB ok--> <SearchRecorder query scope resultCount/>   client island, renders null
+ |                                  | 1.5 s dwell, once per tab session
+ |                                  v
+ |                    POST /api/search-events (Route Handler) --> supabase.rpc("record_search")  (user's cookie session)
+ '- (empty query) --> <RecentSearches/>   client island, gated on useSession() === "signed-in"
+                          | Server Actions: loadSearchHistory / removeSearchHistory  (getAuthedClient, RLS)
+```
+
+* `/search` keeps **no** session read, no `proxy.ts` change and no `cookies()` call; it was already dynamic (`ƒ`) and still is. A failed TMDB search renders its existing error state **without** the recorder. The count is `items.length` of the page that was rendered, so there is no extra TMDB request.
+* Guests download no Supabase SDK for this feature. For signed-in users the SDK loads exactly as before (header account link).
+* History uses Server Actions rather than a second Route Handler, as decided in the Checkpoint 1 investigation: an expired token is refreshed where cookies are writable, and Next's built-in Origin check protects them. Recording uses a Route Handler, as decided in Checkpoint 2, so it does not queue behind other Server Actions.
+
+### Route Handler contract (`POST /api/search-events`)
+
+Body: `{ "query": string, "scope": "all" | "movie" | "tv", "resultCount": integer 0..10000 }`, **strict**: any other key, including a user id or a timestamp, is a 400. Query is checked for shape only (non-empty, at most 100 code points); the database alone canonicalizes and decides whether it is meaningful. Responses are bare statuses with `Cache-Control: no-store` and an empty body.
+
+| Status | Meaning |
+| --- | --- |
+| 204 | Accepted (also when the database silently drops a meaningless query such as `!!`) |
+| 400 | Not JSON, wrong shape, extra key, bad scope, count or query |
+| 403 | `Sec-Fetch-Site` present and not `same-origin` |
+| 405 | Any method other than POST (Next's default) |
+| 413 | Body over 2,048 characters |
+| 415 | Content-Type is not `application/json` |
+| 502 | Supabase refused the call (see the stale-identity table); the query and the upstream message are neither logged nor returned |
+| 503 | Supabase not configured |
+
+**CSRF.** Route Handlers get no Origin check from Next.js (only Server Actions do; installed docs, `data-security.md`). The handler therefore requires JSON (a cross-origin browser needs a preflight, which the route never answers: VERIFIED, `OPTIONS` returns no CORS headers), rejects cross-site `Sec-Fetch-Site`, and relies on the SameSite=Lax session cookie (VERIFIED on the refreshed cookies). Not covered: a very old browser without `Sec-Fetch-Site` sending a cross-origin request; the JSON requirement and Lax cookies still block it in theory.
+
+### Recording semantics (VERIFIED, real browser)
+
+* Fires **once, about 1.5 s after the results render** (measured 1,482 ms); nothing is sent during the first second.
+* The payload is exactly `{query, scope, resultCount}`: no id, no timestamp, no result objects. The guest request carries no auth cookie.
+* Typing through prefixes (`inc`, `ince`, `incep`, `inception`, pausing less than the dwell) records **only** `inception`. Navigating away before the dwell records nothing. An empty search (with or without a scope) records nothing. A TMDB failure shows the existing error state and records nothing (second server with an invalid TMDB token).
+* A search with **zero results is recorded, with count 0**. This matches the Checkpoint 2 design: trending filters on `result_count > 0`.
+* **Result count** is the number of items on the rendered page (at most 20), clamped to 0..10,000 before sending. It is a display and analysis hint, **not** the total number of matches, and the database treats it as untrusted. The database function was not changed.
+* **Dedupe:** one recording per exact `(scope, query)` text per **tab session** (`sessionStorage`, at most 50 remembered, with an in-memory fallback when storage is unavailable). Verified: reload, navigate away and back, and switching scope back and forth send nothing extra; the same query under another scope is recorded; a **new tab** records again (it is a new browser session); with `sessionStorage` blocked it still records once and raises no error. No library, no `localStorage`, no identifier. React StrictMode in development still sends exactly one request.
+
+### Authenticated recording (VERIFIED, live, real sign-in form)
+
+Recording creates history under the signed-in user, canonicalized by the database (`Alpha  Query` becomes `alpha query`). The same `(scope, query)` refreshes instead of duplicating; the same query under another scope is a separate row; ordering is newest first. A payload naming another user's id is rejected (400) and writes nothing.
+
+### Stale, rotated and invalid identity (VERIFIED, live)
+
+The invariant that matters held: **no history row was ever created for another user, and none for anyone in any of these cases (0 new rows across all of them).** The outcomes below are what Supabase actually produces; nothing in the handler forces them.
+
+| Cookie / session | Handler status | Analytics event | History |
+| --- | --- | --- | --- |
+| No cookie (guest) | 204 | recorded, anonymous | none |
+| Valid session | 204 | recorded | under that user |
+| **Expired access token, valid refresh token** | 204 | recorded | under that user; the handler wrote a **rotated** session cookie (new refresh token) to its response, and that cookie is itself valid |
+| **5 concurrent requests sharing one expired cookie** | 204 x5 | 5 | all 5 under that user; the Auth server still confirms the session afterwards |
+| Unreadable cookie value (garbage, base64 that is not JSON) | 204 | recorded **anonymously** (the SDK treats it as no session) | none |
+| Token with a corrupted signature | **502** | **none** (PostgREST rejects the token) | none |
+| Token payload edited to name a different user | **502** | none | none, for anyone |
+| Expired access token + **revoked** refresh token | 204 | recorded **anonymously**; the auth cookie is cleared | none |
+| **Valid token, user deleted afterwards** | **502** | **none** | none: `record_search` is one transaction and the foreign-key failure rolls the whole call back (this was LOCAL-only evidence in Checkpoint 2; now VERIFIED live) |
+
+Notes: an unreadable or revoked session degrades to anonymous analytics, which carries no identity. A deleted user's token is refused until it expires (at most about an hour) and the UI says nothing (see below). A caller holding a valid token can tell "my account is gone" from the status; nobody without that token can probe whether an account exists.
+
+**Refresh races (VERIFIED at two levels).** (1) The Route Handler alone, above. (2) In a real browser with the access token set to expired: the browser SDK (`useSession`), the `loadSearchHistory` Server Action and the Route Handler all refresh close together. The history list still loads, the recording returns 204 and lands under the right user, the browser ends up with a rotated refresh token and a future expiry, the Auth server confirms the user, and after a reload the user is still signed in. This is consistent with Supabase's refresh-token reuse window. **No `proxy.ts` change is needed**, because the handler refreshes where cookies are writable. NOT TESTED: refresh after the reuse window has elapsed.
+
+### Recent-search history (VERIFIED, live, real browser)
+
+* Gated on `useSession() === "signed-in"`. Guests render nothing and make **no request and no Server Action call**. Loaded once per mount through `loadSearchHistory` (`select scope, query`, newest first, limit 20). Shown only in the empty-query state and placed **after** the existing Trending block, so nothing already on screen moves when it appears.
+* Each row shows the query and its scope (`inception  Movies`); a signed-in user with no history sees a one-line explanation instead of a blank box. The stored query is the database's canonical form (lowercase), so rows and the re-run search are lowercase; TMDB search is case-insensitive.
+* Selecting a row goes to `/search?q=<query>&type=<scope>` through the new shared `searchHref` (the result tabs now use it too). Verified: URL, active scope tab and search-box value.
+* **Delete** (`removeSearchHistory`; own rows by RLS; the action takes only `{scope, query}`): optimistic; removed from the UI and the database; another user's row with the same key is unaffected (two users tested); focus moves to the neighbouring row, or to the empty-state note when the last entry goes; works from the keyboard (Tab to the row's remove button, Enter).
+* **Delete failure:** the row is restored **in its original position**, an accessible `role="alert"` says so, focus returns to that row's remove button, the database row is intact, and a retry after the outage succeeds and clears the alert.
+* **History load failure:** the section is simply absent; no error UI; search works normally.
+* **A deleted user's still-valid session in a browser:** search works, the recording call is refused (502) and nothing is shown to the user; the history area shows the empty note (the read is authorized by a locally verified token, so it cannot tell). Cosmetic and short-lived.
+* Not added: "clear all". Individual delete is sufficient and needs nothing beyond the existing DELETE-own policy.
+
+### Database types
+
+`supabase gen types typescript --schema public` (CLI 2.117.0, postgres-meta 0.99.0) ran against the live project. It needs Docker (the CLI runs postgres-meta in a container). The result is clean: three tables (`profiles`, `watchlist_items`, `search_history`) and two functions (`record_search`, `trending_searches`); **no `private` and no `graphql_public`**. It was **not accepted wholesale**: the generated file is 229 lines against 45, and a straight replacement would (1) widen the Phase 2 `media_type` union to `string`, which breaks typecheck in `lib/watchlist-actions.ts`, (2) drop the `Insert: never` and `Update` narrowing that encodes column-level grants, and (3) add about 110 lines of helper types that nothing imports. So the Phase 3 objects were taken from the generator **verbatim** into the existing file, with one deliberate exception: `search_history` `Insert` and `Update` are `never` (clients hold no such grant, so a stray `.insert()` should fail typecheck). The file header records both provenances. **Decision (accepted at close-out): keep this hybrid.** The full generated output is not adopted and no override or type-generation architecture is introduced in Checkpoint 3. The file header now states what a maintainer needs: it holds generated shapes plus deliberate restrictions, `search_history` `Insert`/`Update` are `never` on purpose, and a regeneration must be diff-reviewed, never pasted over the file. `media_type` remains `"movie" | "tv"` and the Phase 2 `Insert`/`Update` grant-encoding types are unchanged.
+
+### Security (VERIFIED unless stated)
+
+* **No service-role key or database URL reaches the application runtime.** No source file references them (grep); the application server ran with them blanked; a scan of every file in `.next/static` (23) and `.next/server` (234) found none of: the service-role key, the database password, either database URL, the Resend key, or the TMDB credentials.
+* **No user id is trusted from a request:** the body schema is strict; the history actions accept only `{scope, query}`; identity is the cookie session, verified by PostgREST and by `getClaims`.
+* **All writes go through `record_search`**, except the user's own RLS-protected history `DELETE`. Application code contains no insert, update or upsert on either table, and no reference to `search_events` at all.
+* **Data API surface re-checked with the publishable key:** `private` is refused (406), there is no public `search_events`, the internal normalizer is not callable, anon can neither insert into nor read `search_history`, and `record_search` has no user-id parameter.
+* Logging: the handler logs only an error code, never the query or the upstream message. (The existing search page still logs the query text when TMDB fails; unchanged.)
+* No RLS, grant or migration change; no migration file is modified.
+
+### Bundle (guest; same method before and after)
+
+Production build, fresh Edge context, `load` plus a 3.5 s settle, sum of the gzip size of every distinct JS response. The "before" run is the unmodified `HEAD` build.
+
+| Page | Before (gzip) | After (gzip) | Change | Supabase SDK loaded |
+| --- | --- | --- | --- | --- |
+| `/search?q=inception` | 147.7 KB (485.4 KB raw, 10 scripts) | 149.6 KB (490.4 KB raw, 10 scripts) | **+1.9 KB** | no, before or after |
+| `/search` | 147.7 KB | 149.6 KB | +1.9 KB | no |
+| `/` | 146.3 KB | 146.4 KB | +0.1 KB | no |
+
+The `/` figure equals the Phase 2 and Checkpoint 1 audits, which validates the method. The extra 1.9 KB is the two islands. `RecentSearches` is statically imported, so guests download its list code although they never render it; lazy-loading it would save roughly 1 KB and was not done, because that is below the "meaningful benefit" bar in `AGENTS.md` (section 18). This is a bundle measurement, not a performance claim.
+
+### Responsive and accessibility (VERIFIED)
+
+Signed-in `/search` with six worst-case entries (100 unbroken characters, CJK, emoji, a long multi-word TV title) at 320, 375, 768 and 1440 px: no horizontal overflow, one `h1`, every remove button 44 by 44 and inside the viewport, every row link 48 px, long entries ellipsised with the scope label kept, **axe (WCAG 2.1 A/AA plus best practice) reported 0 violations at all four widths**, no page errors. Keyboard: Tab visits each row's link and then its remove button, in order, and every stop shows the focus ring. The link's accessible name is `dune in All`, the button's is `Remove “dune” in All from recent searches`, and the section is a named region with a heading and a list. Guest `/search` and `/search?q=inception` at the same four widths: no overflow, one `h1`, axe clean, structure unchanged (`Search`, `Trending searches`), no history UI. Screenshots were reviewed at 320 and 1440. INSPECTED only: real screen reader and mobile keyboard behaviour. The known 768 to 960 px header compression was not touched and this checkpoint does not affect it.
+
+### Test totals
+
+Route Handler contract and auth matrix **74/74**; guest browser **28/28**; signed-in browser **44/44**; responsive and accessibility **34/34**; Data API surface **6/6**; the development-mode StrictMode single-POST check passed.
+
+Four harness defects were found and fixed along the way, all in the tests and none in the application: Next's own empty route announcer counted as an alert; a sign-in wait that matched the sign-in URL itself (the harness raced ahead and briefly tested a guest); and two keyboard assertions that filtered on truncated text. Each was diagnosed from evidence before anything was changed, and the whole suite was rerun.
+
+### Quality gates (final tree)
+
+`npm run lint`, `npm run typecheck`, `npm run build` (service-role key and database URLs blanked; the route table shows `ƒ /api/search-events` and `/search` still `ƒ`) and `git diff --check` all pass. The four new untracked files were also checked for whitespace and line endings separately, because `git diff --check` does not cover untracked files.
+
+### NOT TESTED
+
+* Refresh-token behaviour after the reuse window; token refresh on the production host (Vercel) as opposed to local `next start`.
+* Real devices, real screen readers, mobile keyboard behaviour.
+* Fresh-checkout behaviour with **no** Supabase variables (by inspection the recorder returns early and the history island renders nothing; not run, because the keyless production build fails at `/account`, item 1 of the debt table).
+* Sustained load, or the real `statement_timeout` (3 s for the anonymous role) hit from the handler.
+* A request from a real second origin (the checks cover the headers and the missing CORS grant, not a live cross-site page).
+* The Node harness's TLS connection to the pooler still did not verify the certificate chain (same limitation as the earlier checkpoints); it carried only test data, owner-level reads and cleanup.
+
+### Technical debt and decisions to note
+
+1. **RELEASE / PUBLIC-EXPOSURE BLOCKER: analytics retention is not scheduled.** Until this checkpoint nothing wrote to `private.search_events`; now every search that dwells 1.5 s does, so debt items 2 and 4 above (no scheduled purge, unbounded scripted growth) are live. The application must not be publicly exposed, and Phase 3 must not be released, until retention is in place. It is deliberately **not** handled here: `private.purge_search_events` is not scheduled and no migration was created at close-out. It will be a bounded operational task before Phase 3 release. Requirement carried forward (debt item 7 above): any scheduler must pass an **explicit, non-null** retention interval (a NULL currently collapses to the 7-day floor), and the schedule must be verified to run before any document states a retention period.
+2. **Dedupe suppresses repeat searches by design.** Repeated searches for the same `(scope, query)` in the same tab session are intentionally not re-sent, so they do **not** refresh history recency. A guest who searched, signed in and searched the same text in the same tab likewise gets no history row until the tab session ends. Accepted for lightness and not to be fixed in Checkpoint 3.
+3. `resultCount` is the rendered page's item count (at most 20), not a total. It is enough for the `> 0` trending filter; a real total means extending `MediaPage`.
+4. A deleted user's token is accepted by the header and the history island until it expires (identity is verified locally) while recording is refused (502). Pre-existing design; cosmetic here.
+5. `database.types.ts` is a hybrid (see Database types). Generating types needs Docker Desktop and its `postgres-meta` image; the workflow is not scripted in the repository.
+6. History sits below the (placeholder) Trending block to avoid layout shift. Checkpoint 4 removes that placeholder, after which the order should be reviewed.
+7. History shows the canonical lowercase query.
+8. The two islands add 1.9 KB gzip for guests.
+9. The `TrendingSearches` placeholder is untouched and not coupled to the new code, as required.
+
+### Close-out (Checkpoint 3 accepted)
+
+* **Types:** the hybrid `lib/supabase/database.types.ts` is kept (see Database types). The header comment was shortened to what a maintainer needs; no type changed.
+* **Retention** is recorded above (technical debt item 1) as a release and public-exposure blocker. Nothing was scheduled and no migration was created at close-out. Any scheduler must pass an explicit, non-null retention interval.
+* **Dedupe** consequence is recorded above (technical debt item 2) as intentional and not fixed in this checkpoint.
+* **Final review:** the change set is exactly the four new files plus `app/search/page.tsx`, `lib/schemas.ts`, `lib/utils.ts`, `types/media.ts`, `lib/supabase/database.types.ts` and this file. The security properties were re-checked against the final code by search: the body schema is strict and the RPC arguments are built only from the parsed query, scope and count; the handler uses the ordinary cookie-aware server client; no service-role key, database URL or Resend key is referenced anywhere in `app`, `lib`, `components`, `types`, `proxy.ts` or `next.config.ts`; the feature contains no insert, update or upsert (its only table operations are `select` and `delete` on `search_history`); there is no access to `private`; `app/search/page.tsx` imports nothing session-related and the `proxy.ts` matcher is unchanged.
+* **Final gates:** `npm run lint`, `npm run typecheck`, `npm run build` and `git diff --check` pass; the new files have no whitespace warnings.
+* **Focused smoke (rebuilt production server, no users created):** the identity-free contract still answers 400 for an extra user-id key, 400 for an extra timestamp key, 415, 403 and 405; `/search?q=<tagged>` produces exactly one `POST /api/search-events` returning 204 with no Supabase SDK for a guest (149.6 KB gzip, unchanged); empty `/search` sends nothing. The single test event was removed and the database matches the pre-checkpoint snapshot again.

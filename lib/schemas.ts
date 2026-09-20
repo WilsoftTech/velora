@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { MAX_SEARCH_LENGTH, MAX_SEARCH_RESULT_COUNT } from "@/lib/utils";
 
 /**
  * Runtime validation for everything that arrives from a browser. Kept free of
@@ -31,6 +32,28 @@ export const mediaRefSchema = z.object({
 });
 
 export const mediaRefListSchema = z.array(mediaRefSchema).max(MAX_WATCHLIST_ITEMS);
+
+/**
+ * A search as the browser reports it. Deliberately shape-only: the database
+ * (private.normalize_search_query) is the single authority on what counts as a
+ * meaningful query, so nothing here trims, lowercases or filters. Strict, so a
+ * payload carrying a user id or a timestamp is rejected rather than ignored.
+ */
+const searchQuery = z
+  .string()
+  .refine((value) => value.length > 0 && Array.from(value).length <= MAX_SEARCH_LENGTH, "Invalid search query.");
+
+const searchScope = z.enum(["all", "movie", "tv"]);
+
+export const recordSearchSchema = z.strictObject({
+  query: searchQuery,
+  scope: searchScope,
+  // Caller-reported and untrusted: a display/analysis hint, never a fact.
+  resultCount: z.number().int().min(0).max(MAX_SEARCH_RESULT_COUNT),
+});
+
+/** Identifies one history row to remove. The user comes from the session, never from here. */
+export const searchHistoryKeySchema = z.strictObject({ query: searchQuery, scope: searchScope });
 
 export type FieldErrors = Record<string, string[] | undefined>;
 

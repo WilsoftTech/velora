@@ -4,22 +4,20 @@ import Link from "next/link";
 import { SearchX, SlidersHorizontal, TriangleAlert, TrendingUp } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { MovieList, MovieListItem } from "@/components/movie-list-item";
+import { RecentSearches } from "@/components/recent-searches";
 import { RetryButton } from "@/components/retry-button";
 import { SearchInput } from "@/components/search-input";
+import { SearchRecorder } from "@/components/search-recorder";
 import { ListSkeleton } from "@/components/skeletons";
 import { TabLinks } from "@/components/tab-links";
 import { discoverHref } from "@/lib/discover";
 import { getTrending, searchMedia } from "@/lib/tmdb/media";
-import { firstParam, normalizeSearchQuery, parseSearchScope } from "@/lib/utils";
+import { SEARCH_SCOPE_LABELS, firstParam, normalizeSearchQuery, parseSearchScope, searchHref } from "@/lib/utils";
 import type { SearchScope } from "@/types/media";
 
 export const metadata: Metadata = { title: "Search" };
 
-const SCOPES: { label: string; value: SearchScope }[] = [
-  { label: "All", value: "all" },
-  { label: "Movies", value: "movie" },
-  { label: "TV Shows", value: "tv" },
-];
+const SCOPES: SearchScope[] = ["all", "movie", "tv"];
 
 const TRENDING_SEARCH_COUNT = 6;
 
@@ -41,22 +39,32 @@ async function SearchResults({ query, scope }: { query: string; scope: SearchSco
     );
   }
 
+  // Reached only when TMDB answered, so a failed search is never recorded. The
+  // count is what this page rendered: a hint for analytics, not a total.
+  const recorder = <SearchRecorder query={query} scope={scope} resultCount={items.length} />;
+
   if (items.length === 0) {
     return (
-      <EmptyState
-        icon={<SearchX className="size-6" />}
-        title={`No results for “${query}”`}
-        description="Check the spelling or try a different title."
-      />
+      <>
+        {recorder}
+        <EmptyState
+          icon={<SearchX className="size-6" />}
+          title={`No results for “${query}”`}
+          description="Check the spelling or try a different title."
+        />
+      </>
     );
   }
 
   return (
-    <MovieList>
-      {items.map((item) => (
-        <MovieListItem key={`${item.mediaType}-${item.id}`} item={item} />
-      ))}
-    </MovieList>
+    <>
+      {recorder}
+      <MovieList>
+        {items.map((item) => (
+          <MovieListItem key={`${item.mediaType}-${item.id}`} item={item} />
+        ))}
+      </MovieList>
+    </>
   );
 }
 
@@ -108,10 +116,10 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
           <>
             <TabLinks
               label="Result type"
-              tabs={SCOPES.map(({ label, value }) => ({
-                label,
+              tabs={SCOPES.map((value) => ({
+                label: SEARCH_SCOPE_LABELS[value],
                 active: value === scope,
-                href: `/search?q=${encodeURIComponent(query)}${value === "all" ? "" : `&type=${value}`}`,
+                href: searchHref(query, value),
               }))}
             />
             <div className="mt-2">
@@ -132,6 +140,8 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
             <Suspense>
               <TrendingSearches />
             </Suspense>
+            {/* After the suggestions, so it appears without moving anything already on screen. */}
+            <RecentSearches />
           </>
         )}
       </div>

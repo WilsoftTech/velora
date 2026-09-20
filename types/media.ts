@@ -46,6 +46,12 @@ export interface MediaPage {
 export type BrowseList = "popular" | "top_rated";
 export type SearchScope = "all" | MediaType;
 
+/** One remembered search of a signed-in user. `query` is the canonical form the database stored. */
+export interface SearchHistoryEntry {
+  query: string;
+  scope: SearchScope;
+}
+
 export type DiscoverSort = "popular" | "rating" | "newest";
 
 /** A validated /discover query. `genre`, `year` and `rating` are null when that filter is off. */
